@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A private, standalone bill splitter for groups.">
+  <title>FairShare — Bill Splitter</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172321;
+      --muted: #64706d;
+      --line: #dce4e1;
+      --soft: #f4f7f6;
+      --paper: #ffffff;
+      --brand: #16856f;
+      --brand-dark: #0e6655;
+      --brand-soft: #e3f5f0;
+      --danger: #bb3d45;
+      --danger-soft: #fff0f1;
+      --positive: #08775f;
+      --negative: #b3454c;
+      --shadow: 0 10px 30px rgba(30, 55, 49, 0.09);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, #e8f7f3 0, transparent 28rem),
+        #f7f9f8;
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 3px solid rgba(22, 133, 111, 0.25);
+      outline-offset: 2px;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 22px clamp(18px, 4vw, 56px);
+      color: white;
+      background: #163c35;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      color: #123d35;
+      background: #68dcc1;
+      font-size: 22px;
+      font-weight: 900;
+    }
+    .brand h1 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
+    .brand p { margin: 1px 0 0; color: #c6dcd7; font-size: 12px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+
+    .page {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 28px clamp(16px, 3vw, 42px) 48px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .toolbar h2 { margin: 0; font-size: clamp(22px, 3vw, 30px); letter-spacing: -0.04em; }
+    .toolbar p { margin: 3px 0 0; color: var(--muted); }
+    .toolbar-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(210px, 0.72fr) minmax(390px, 1.5fr) minmax(270px, 0.9fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 19px;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-head h3 { margin: 0; font-size: 16px; }
+    .panel-body { padding: 16px 18px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 40px;
+      padding: 8px 14px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      font-weight: 700;
+      transition: 150ms ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { color: white; background: var(--brand); }
+    .btn-primary:hover { background: var(--brand-dark); }
+    .btn-secondary { color: var(--ink); border-color: var(--line); background: white; }
+    .btn-secondary:hover { border-color: #aabcb7; background: var(--soft); }
+    .btn-quiet { min-height: 34px; padding: 5px 9px; color: var(--muted); background: transparent; }
+    .btn-quiet:hover { color: var(--ink); background: var(--soft); }
+    .btn-danger { color: var(--danger); border-color: #efc8cb; background: var(--danger-soft); }
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+    }
+    .icon-btn:hover { color: var(--ink); background: var(--soft); }
+
+    .field { display: grid; min-width: 0; gap: 6px; }
+    .field > label, .field-label { color: #40504c; font-size: 13px; font-weight: 750; }
+    .input {
+      width: 100%;
+      min-width: 0;
+      min-height: 42px;
+      padding: 9px 11px;
+      border: 1px solid #cbd7d3;
+      border-radius: 9px;
+      color: var(--ink);
+      background: white;
+    }
+    .input:hover { border-color: #aabcb7; }
+    .input[readonly] { color: var(--muted); background: var(--soft); }
+    .input-group { display: flex; }
+    .input-prefix {
+      display: grid;
+      place-items: center;
+      min-width: 40px;
+      border: 1px solid #cbd7d3;
+      border-right: 0;
+      border-radius: 9px 0 0 9px;
+      color: var(--muted);
+      background: var(--soft);
+    }
+    .input-group .input { border-radius: 0 9px 9px 0; }
+
+    .add-person { display: flex; gap: 8px; margin-bottom: 14px; }
+    .people-list, .expense-list, .balance-list, .settlement-list {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .person-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 3px;
+    }
+    .avatar {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      color: #175448;
+      background: var(--brand-soft);
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .person-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+    .person-actions { display: flex; }
+
+    .empty {
+      padding: 28px 16px;
+      border: 1px dashed #c9d7d3;
+      border-radius: 12px;
+      color: var(--muted);
+      text-align: center;
+      background: var(--soft);
+    }
+    .empty strong { display: block; margin-bottom: 3px; color: var(--ink); }
+
+    .expense-card {
+      display: grid;
+      grid-template-columns: 50px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+    }
+    .expense-date {
+      padding: 7px 4px;
+      border-radius: 9px;
+      color: var(--muted);
+      background: var(--soft);
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .expense-date strong { display: block; color: var(--ink); font-size: 18px; line-height: 1.05; }
+    .expense-main { min-width: 0; }
+    .expense-title { margin: 0; overflow-wrap: anywhere; font-size: 15px; }
+    .expense-meta { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .expense-split { margin: 8px 0 0; color: #42534f; font-size: 12px; }
+    .expense-side { text-align: right; }
+    .expense-amount { font-size: 16px; font-weight: 850; }
+    .expense-buttons { display: flex; justify-content: flex-end; margin-top: 5px; }
+
+    .summary-total {
+      padding: 15px;
+      border-radius: 12px;
+      color: #19483e;
+      background: var(--brand-soft);
+    }
+    .summary-total span { display: block; font-size: 12px; }
+    .summary-total strong { display: block; margin-top: 2px; font-size: 25px; letter-spacing: -0.03em; }
+    .summary-label { margin: 19px 0 8px; color: var(--muted); font-size: 11px; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+    .balance-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .balance-row:last-child { border-bottom: 0; }
+    .balance-row small { display: block; color: var(--muted); }
+    .money-positive { color: var(--positive); }
+    .money-negative { color: var(--negative); }
+    .money-neutral { color: var(--muted); }
+    .balance-money { white-space: nowrap; font-weight: 850; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 0;
+    }
+    .toggle-row span { color: var(--muted); font-size: 12px; }
+    .switch { position: relative; display: inline-flex; }
+    .switch input { position: absolute; opacity: 0; }
+    .switch-track {
+      display: block;
+      width: 44px;
+      height: 24px;
+      border-radius: 99px;
+      background: #b8c5c1;
+      transition: 150ms;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      transition: 150ms;
+    }
+    .switch input:checked + .switch-track { background: var(--brand); }
+    .switch input:checked + .switch-track::after { transform: translateX(20px); }
+    .switch input:focus-visible + .switch-track { outline: 3px solid rgba(22, 133, 111, 0.25); outline-offset: 2px; }
+    .settlement {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      background: var(--soft);
+      font-size: 13px;
+    }
+    .settlement .arrow { color: var(--brand); font-weight: 900; }
+    .settlement strong:last-child { margin-left: auto; white-space: nowrap; }
+
+    dialog {
+      width: min(760px, calc(100% - 24px));
+      max-height: calc(100vh - 30px);
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      border-radius: 18px;
+      color: var(--ink);
+      background: white;
+      box-shadow: 0 24px 80px rgba(16, 44, 38, 0.3);
+    }
+    dialog::backdrop { background: rgba(10, 30, 26, 0.58); backdrop-filter: blur(3px); }
+    .dialog-form { display: flex; flex-direction: column; max-height: calc(100vh - 30px); }
+    .dialog-head, .dialog-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex: 0 0 auto;
+      padding: 17px 20px;
+    }
+    .dialog-head { border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { margin: 0; font-size: 19px; }
+    .dialog-foot { border-top: 1px solid var(--line); background: var(--soft); }
+    .dialog-body { overflow-y: auto; padding: 20px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 160px 150px; gap: 13px; }
+    .form-section { margin-top: 22px; }
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+    .section-heading h3 { margin: 0; font-size: 14px; }
+    .section-heading span { color: var(--muted); font-size: 12px; }
+    .allocation-table { width: 100%; border-collapse: collapse; }
+    .allocation-table th {
+      padding: 7px 9px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .05em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .allocation-table th:last-child { text-align: right; }
+    .allocation-table td { padding: 7px 9px; border-top: 1px solid var(--line); }
+    .allocation-table td:last-child { width: 180px; }
+    .table-person { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .table-person .avatar { width: 29px; height: 29px; font-size: 11px; }
+    .check-person { display: flex; align-items: center; gap: 9px; cursor: pointer; }
+    .check-person input { width: 17px; height: 17px; accent-color: var(--brand); }
+    .split-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .split-help { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    .split-tab {
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--muted);
+      background: white;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .split-tab[aria-selected="true"] { color: var(--brand-dark); border-color: #8ac9b9; background: var(--brand-soft); }
+    .owed-input-wrap { display: flex; align-items: center; gap: 6px; }
+    .owed-input-wrap .input { min-height: 36px; padding: 6px 8px; text-align: right; }
+    .unit { min-width: 23px; color: var(--muted); font-size: 12px; }
+    .preview { min-width: 72px; color: var(--muted); font-size: 12px; text-align: right; }
+    .form-error {
+      min-height: 22px;
+      margin: 10px 0 0;
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .privacy-note { margin-top: 15px; color: var(--muted); font-size: 12px; text-align: center; }
+
+    .toast {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      z-index: 20;
+      max-width: min(380px, calc(100% - 40px));
+      padding: 12px 16px;
+      border-radius: 10px;
+      color: white;
+      background: #173d36;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: 180ms ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 1050px) {
+      .workspace { grid-template-columns: 230px 1fr; }
+      .balances-panel { grid-column: 1 / -1; }
+      .balances-panel .panel-body { display: grid; grid-template-columns: 220px 1fr; gap: 22px; }
+      .summary-label:first-of-type { margin-top: 0; }
+    }
+
+    @media (max-width: 720px) {
+      .app-header, .toolbar { align-items: flex-start; }
+      .app-header { padding: 16px; }
+      .brand p { display: none; }
+      .header-actions .currency-label { display: none; }
+      .header-actions .input { width: 92px; }
+      .header-actions .btn { padding-inline: 10px; }
+      .toolbar { flex-direction: column; }
+      .toolbar-actions { width: 100%; flex-direction: column; justify-content: stretch; }
+      .toolbar-actions .btn { flex: 1; }
+      .workspace { grid-template-columns: 1fr; }
+      .balances-panel { grid-column: auto; }
+      .balances-panel .panel-body { display: block; }
+      .expense-card { grid-template-columns: 44px minmax(0, 1fr); }
+      .expense-side { grid-column: 2; text-align: left; }
+      .expense-buttons { justify-content: flex-start; }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+      .form-grid .field:first-child { grid-column: 1 / -1; }
+      .allocation-table th:nth-child(2), .allocation-table td:nth-child(2) { display: none; }
+      .allocation-table td:last-child { width: 145px; }
+      .dialog-head, .dialog-foot, .dialog-body { padding-inline: 15px; }
+    }
+
+    @media (max-width: 430px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .field:first-child { grid-column: auto; }
+      .dialog-foot { align-items: stretch; flex-direction: column-reverse; }
+      .dialog-foot > div { display: flex; }
+      .dialog-foot .btn { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">F</div>
+      <div>
+        <h1>FairShare</h1>
+        <p>Split expenses, settle simply</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <label class="currency-label" for="currencySelect">Currency</label>
+      <select id="currencySelect" class="input" aria-label="Currency">
+        <option value="USD">USD ($)</option>
+        <option value="EUR">EUR (€)</option>
+        <option value="GBP">GBP (£)</option>
+        <option value="CAD">CAD ($)</option>
+        <option value="AUD">AUD ($)</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="toolbar" aria-labelledby="pageTitle">
+      <div>
+        <h2 id="pageTitle">Group expenses</h2>
+        <p>Everyone's spending and balances in one place.</p>
+      </div>
+      <div class="toolbar-actions">
+        <button id="addExpenseBtn" class="btn btn-primary" type="button">＋ Add expense</button>
+      </div>
+    </section>
+
+    <div class="workspace">
+      <section class="panel" aria-labelledby="peopleTitle">
+        <div class="panel-head">
+          <h3 id="peopleTitle">People</h3>
+          <span id="peopleCount" aria-live="polite">0</span>
+        </div>
+        <div class="panel-body">
+          <form id="personForm" class="add-person">
+            <label class="field" style="flex:1">
+              <span class="field-label">Add a person</span>
+              <input id="personName" class="input" name="name" maxlength="50" autocomplete="off" placeholder="Name" required>
+            </label>
+            <button class="btn btn-secondary" type="submit" aria-label="Add person" style="align-self:end">Add</button>
+          </form>
+          <ul id="peopleList" class="people-list"></ul>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="expensesTitle">
+        <div class="panel-head">
+          <h3 id="expensesTitle">Expenses</h3>
+          <span id="expenseCount">0 purchases</span>
+        </div>
+        <div class="panel-body">
+          <div id="expensesEmpty" class="empty">
+            <strong>No expenses yet</strong>
+            Add people, then record the first shared purchase.
+          </div>
+          <ul id="expenseList" class="expense-list"></ul>
+        </div>
+      </section>
+
+      <section class="panel balances-panel" aria-labelledby="balancesTitle">
+        <div class="panel-head">
+          <h3 id="balancesTitle">Balances</h3>
+          <button id="resetBtn" class="btn btn-quiet" type="button">Reset data</button>
+        </div>
+        <div class="panel-body">
+          <div>
+            <div class="summary-total">
+              <span>Total group spending</span>
+              <strong id="totalSpending">$0.00</strong>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <strong>Simplify debts</strong>
+                <span>Use fewer payments</span>
+              </div>
+              <label class="switch">
+                <input id="simplifyToggle" type="checkbox" aria-label="Simplify debts">
+                <span class="switch-track"></span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <h4 class="summary-label">Net by person</h4>
+            <ul id="balanceList" class="balance-list"></ul>
+            <h4 class="summary-label">Who should pay whom</h4>
+            <ul id="settlementList" class="settlement-list"></ul>
+          </div>
+        </div>
+      </section>
+    </div>
+    <p class="privacy-note">Your data stays in this browser. Nothing is uploaded.</p>
+  </main>
+
+  <dialog id="expenseDialog" aria-labelledby="dialogTitle">
+    <form id="expenseForm" class="dialog-form" novalidate>
+      <div class="dialog-head">
+        <h2 id="dialogTitle">Add expense</h2>
+        <button id="closeDialogBtn" class="icon-btn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="dialog-body">
+        <div class="form-grid">
+          <label class="field">
+            <span>Description</span>
+            <input id="expenseDescription" class="input" maxlength="100" placeholder="e.g. Airport cab" required>
+          </label>
+          <label class="field">
+            <span>Date</span>
+            <input id="expenseDate" class="input" type="date" required>
+          </label>
+          <label class="field">
+            <span>Total</span>
+            <span class="input-group">
+              <span id="currencySymbol" class="input-prefix">$</span>
+              <input id="expenseAmount" class="input" inputmode="decimal" placeholder="0.00" required>
+            </span>
+          </label>
+        </div>
+
+        <section class="form-section" aria-labelledby="paidHeading">
+          <div class="section-heading">
+            <h3 id="paidHeading">Who paid?</h3>
+            <span id="paidStatus">Enter the contributions</span>
+          </div>
+          <table class="allocation-table">
+            <thead><tr><th>Person</th><th>Role</th><th>Paid</th></tr></thead>
+            <tbody id="payerRows"></tbody>
+          </table>
+        </section>
+
+        <section class="form-section" aria-labelledby="owedHeading">
+          <div class="section-heading">
+            <h3 id="owedHeading">How is it split?</h3>
+            <span id="owedStatus">Choose who participated</span>
+          </div>
+          <div id="splitTabs" class="split-tabs" role="tablist" aria-label="Split method">
+            <button class="split-tab" type="button" role="tab" data-mode="equal" aria-selected="true">Equally</button>
+            <button class="split-tab" type="button" role="tab" data-mode="exact" aria-selected="false">Exact amounts</button>
+            <button class="split-tab" type="button" role="tab" data-mode="percent" aria-selected="false">Percentages</button>
+            <button class="split-tab" type="button" role="tab" data-mode="shares" aria-selected="false">Shares</button>
+          </div>
+          <p class="split-help">Uncheck a person to exclude them. The total will be split only among the people included.</p>
+          <table class="allocation-table" style="margin-top:8px">
+            <thead><tr><th>Participant</th><th>Included</th><th id="owedColumnTitle">Owes</th></tr></thead>
+            <tbody id="owedRows"></tbody>
+          </table>
+        </section>
+        <p id="formError" class="form-error" role="alert"></p>
+      </div>
+      <div class="dialog-foot">
+        <button id="deleteExpenseBtn" class="btn btn-danger" type="button" hidden>Delete expense</button>
+        <div style="display:flex; gap:8px; margin-left:auto">
+          <button id="cancelExpenseBtn" class="btn btn-secondary" type="button">Cancel</button>
+          <button class="btn btn-primary" type="submit">Save expense</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE_KEY = "fairshare.bill-splitter.v1";
+      const CURRENCIES = {
+        USD: { locale: "en-US", symbol: "$" },
+        EUR: { locale: "de-DE", symbol: "€" },
+        GBP: { locale: "en-GB", symbol: "£" },
+        CAD: { locale: "en-CA", symbol: "$" },
+        AUD: { locale: "en-AU", symbol: "$" }
+      };
+
+      const emptyState = () => ({
+        people: [],
+        expenses: [],
+        currency: "USD",
+        simplify: true
+      });
+
+      let state = loadState();
+      let editingExpenseId = null;
+      let splitMode = "equal";
+      let toastTimer = null;
+
+      const $ = (selector) => document.querySelector(selector);
+      const els = {
+        currencySelect: $("#currencySelect"),
+        peopleCount: $("#peopleCount"),
+        personForm: $("#personForm"),
+        personName: $("#personName"),
+        peopleList: $("#peopleList"),
+        addExpenseBtn: $("#addExpenseBtn"),
+        expenseCount: $("#expenseCount"),
+        expenseList: $("#expenseList"),
+        expensesEmpty: $("#expensesEmpty"),
+        totalSpending: $("#totalSpending"),
+        simplifyToggle: $("#simplifyToggle"),
+        balanceList: $("#balanceList"),
+        settlementList: $("#settlementList"),
+        resetBtn: $("#resetBtn"),
+        dialog: $("#expenseDialog"),
+        dialogTitle: $("#dialogTitle"),
+        expenseForm: $("#expenseForm"),
+        description: $("#expenseDescription"),
+        date: $("#expenseDate"),
+        amount: $("#expenseAmount"),
+        currencySymbol: $("#currencySymbol"),
+        payerRows: $("#payerRows"),
+        owedRows: $("#owedRows"),
+        splitTabs: $("#splitTabs"),
+        owedColumnTitle: $("#owedColumnTitle"),
+        paidStatus: $("#paidStatus"),
+        owedStatus: $("#owedStatus"),
+        formError: $("#formError"),
+        closeDialogBtn: $("#closeDialogBtn"),
+        cancelExpenseBtn: $("#cancelExpenseBtn"),
+        deleteExpenseBtn: $("#deleteExpenseBtn"),
+        toast: $("#toast")
+      };
+
+      function makeId(prefix) {
+        if (globalThis.crypto && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
+        return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function parseCents(value) {
+        const normalized = String(value ?? "").trim().replace(/,/g, "");
+        if (!/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
+        const [whole, fraction = ""] = normalized.split(".");
+        const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+        return Number.isSafeInteger(cents) ? cents : null;
+      }
+
+      function centsToInput(cents) {
+        return (Number(cents || 0) / 100).toFixed(2);
+      }
+
+      function formatMoney(cents) {
+        const config = CURRENCIES[state.currency] || CURRENCIES.USD;
+        return new Intl.NumberFormat(config.locale, {
+          style: "currency",
+          currency: state.currency
+        }).format((cents || 0) / 100);
+      }
+
+      function allocateByWeights(totalCents, entries) {
+        const valid = entries.filter((entry) => entry.weight > 0);
+        const totalWeight = valid.reduce((sum, entry) => sum + entry.weight, 0);
+        if (!valid.length || !Number.isFinite(totalWeight) || totalWeight <= 0) return {};
+
+        const allocations = {};
+        const remainders = [];
+        let assigned = 0;
+        valid.forEach((entry, index) => {
+          const exact = totalCents * entry.weight / totalWeight;
+          const floor = Math.floor(exact);
+          allocations[entry.id] = floor;
+          assigned += floor;
+          remainders.push({ id: entry.id, remainder: exact - floor, index });
+        });
+        remainders.sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+        for (let i = 0; i < totalCents - assigned; i += 1) {
+          allocations[remainders[i % remainders.length].id] += 1;
+        }
+        return allocations;
+      }
+
+      function calculateNets() {
+        const nets = Object.fromEntries(state.people.map((person) => [person.id, 0]));
+        state.expenses.forEach((expense) => {
+          Object.entries(expense.paid).forEach(([id, cents]) => {
+            if (id in nets) nets[id] += cents;
+          });
+          Object.entries(expense.owed).forEach(([id, cents]) => {
+            if (id in nets) nets[id] -= cents;
+          });
+        });
+        return nets;
+      }
+
+      function matchBalances(nets) {
+        const debtors = [];
+        const creditors = [];
+        state.people.forEach((person, index) => {
+          const amount = nets[person.id] || 0;
+          if (amount < 0) debtors.push({ id: person.id, amount: -amount, index });
+          if (amount > 0) creditors.push({ id: person.id, amount, index });
+        });
+        debtors.sort((a, b) => b.amount - a.amount || a.index - b.index);
+        creditors.sort((a, b) => b.amount - a.amount || a.index - b.index);
+
+        const transfers = [];
+        let d = 0;
+        let c = 0;
+        while (d < debtors.length && c < creditors.length) {
+          const amount = Math.min(debtors[d].amount, creditors[c].amount);
+          if (amount > 0) transfers.push({ from: debtors[d].id, to: creditors[c].id, amount });
+          debtors[d].amount -= amount;
+          creditors[c].amount -= amount;
+          if (debtors[d].amount === 0) d += 1;
+          if (creditors[c].amount === 0) c += 1;
+        }
+        return transfers;
+      }
+
+      function rawTransfers() {
+        const pairTotals = new Map();
+        state.expenses.forEach((expense) => {
+          const ids = new Set([...Object.keys(expense.paid), ...Object.keys(expense.owed)]);
+          const expenseNets = {};
+          ids.forEach((id) => {
+            expenseNets[id] = (expense.paid[id] || 0) - (expense.owed[id] || 0);
+          });
+          const transfers = matchSpecificBalances(expenseNets, [...ids]);
+          transfers.forEach(({ from, to, amount }) => {
+            const forward = `${from}|${to}`;
+            const reverse = `${to}|${from}`;
+            const opposing = pairTotals.get(reverse) || 0;
+            if (opposing >= amount) {
+              pairTotals.set(reverse, opposing - amount);
+            } else {
+              pairTotals.delete(reverse);
+              pairTotals.set(forward, (pairTotals.get(forward) || 0) + amount - opposing);
+            }
+          });
+        });
+        return [...pairTotals.entries()]
+          .filter(([, amount]) => amount > 0)
+          .map(([pair, amount]) => {
+            const [from, to] = pair.split("|");
+            return { from, to, amount };
+          })
+          .sort((a, b) => b.amount - a.amount);
+      }
+
+      function matchSpecificBalances(nets, orderedIds) {
+        const debtors = orderedIds
+          .filter((id) => (nets[id] || 0) < 0)
+          .map((id) => ({ id, amount: -nets[id] }));
+        const creditors = orderedIds
+          .filter((id) => (nets[id] || 0) > 0)
+          .map((id) => ({ id, amount: nets[id] }));
+        const result = [];
+        let d = 0;
+        let c = 0;
+        while (d < debtors.length && c < creditors.length) {
+          const amount = Math.min(debtors[d].amount, creditors[c].amount);
+          result.push({ from: debtors[d].id, to: creditors[c].id, amount });
+          debtors[d].amount -= amount;
+          creditors[c].amount -= amount;
+          if (!debtors[d].amount) d += 1;
+          if (!creditors[c].amount) c += 1;
+        }
+        return result;
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch {
+          showToast("Could not save to this browser.");
+        }
+      }
+
+      function loadState() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (!parsed || !Array.isArray(parsed.people) || !Array.isArray(parsed.expenses)) return emptyState();
+          return {
+            people: parsed.people.filter((person) => person && typeof person.id === "string" && typeof person.name === "string"),
+            expenses: parsed.expenses.filter(isValidStoredExpense),
+            currency: CURRENCIES[parsed.currency] ? parsed.currency : "USD",
+            simplify: parsed.simplify !== false
+          };
+        } catch {
+          return emptyState();
+        }
+      }
+
+      function isValidStoredExpense(expense) {
+        return expense &&
+          typeof expense.id === "string" &&
+          typeof expense.description === "string" &&
+          Number.isSafeInteger(expense.total) &&
+          expense.total >= 0 &&
+          expense.paid && typeof expense.paid === "object" &&
+          expense.owed && typeof expense.owed === "object";
+      }
+
+      function personById(id) {
+        return state.people.find((person) => person.id === id);
+      }
+
+      function initials(name) {
+        return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+      }
+
+      function render() {
+        els.currencySelect.value = state.currency;
+        els.currencySymbol.textContent = CURRENCIES[state.currency].symbol;
+        els.simplifyToggle.checked = state.simplify;
+        renderPeople();
+        renderExpenses();
+        renderBalances();
+      }
+
+      function renderPeople() {
+        els.peopleCount.textContent = String(state.people.length);
+        if (!state.people.length) {
+          els.peopleList.innerHTML = '<li class="empty"><strong>No one here yet</strong>Add everyone sharing expenses.</li>';
+          return;
+        }
+        els.peopleList.innerHTML = state.people.map((person) => `
+          <li class="person-row">
+            <span class="avatar" aria-hidden="true">${escapeHtml(initials(person.name))}</span>
+            <span class="person-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</span>
+            <span class="person-actions">
+              <button class="icon-btn" type="button" data-action="rename-person" data-id="${person.id}" aria-label="Rename ${escapeHtml(person.name)}">✎</button>
+              <button class="icon-btn" type="button" data-action="delete-person" data-id="${person.id}" aria-label="Remove ${escapeHtml(person.name)}">✕</button>
+            </span>
+          </li>
+        `).join("");
+      }
+
+      function renderExpenses() {
+        els.expensesEmpty.hidden = state.expenses.length > 0;
+        els.expenseList.hidden = state.expenses.length === 0;
+        els.expenseCount.textContent = `${state.expenses.length} ${state.expenses.length === 1 ? "purchase" : "purchases"}`;
+        const sorted = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+        els.expenseList.innerHTML = sorted.map((expense) => {
+          const date = parseLocalDate(expense.date);
+          const paidNames = Object.entries(expense.paid)
+            .filter(([, amount]) => amount > 0)
+            .map(([id, amount]) => `${personById(id)?.name || "Removed"} ${formatMoney(amount)}`)
+            .join(", ");
+          const participantCount = Object.values(expense.owed).filter((amount) => amount > 0).length;
+          return `
+            <li class="expense-card">
+              <time class="expense-date" datetime="${escapeHtml(expense.date)}">${date.month}<strong>${date.day}</strong></time>
+              <div class="expense-main">
+                <h4 class="expense-title">${escapeHtml(expense.description)}</h4>
+                <p class="expense-meta">Paid by ${escapeHtml(paidNames)}</p>
+                <p class="expense-split">Split ${splitModeLabel(expense.splitMode)} between ${participantCount} ${participantCount === 1 ? "person" : "people"}</p>
+              </div>
+              <div class="expense-side">
+                <div class="expense-amount">${formatMoney(expense.total)}</div>
+                <div class="expense-buttons">
+                  <button class="btn btn-quiet" type="button" data-action="edit-expense" data-id="${expense.id}">Edit</button>
+                </div>
+              </div>
+            </li>
+          `;
+        }).join("");
+      }
+
+      function parseLocalDate(value) {
+        const date = new Date(`${value}T12:00:00`);
+        if (Number.isNaN(date.getTime())) return { month: "—", day: "—" };
+        return {
+          month: date.toLocaleDateString(undefined, { month: "short" }),
+          day: date.toLocaleDateString(undefined, { day: "2-digit" })
+        };
+      }
+
+      function splitModeLabel(mode) {
+        return ({ equal: "equally", exact: "by exact amounts", percent: "by percentage", shares: "by shares" })[mode] || "custom";
+      }
+
+      function renderBalances() {
+        const total = state.expenses.reduce((sum, expense) => sum + expense.total, 0);
+        const nets = calculateNets();
+        els.totalSpending.textContent = formatMoney(total);
+
+        if (!state.people.length) {
+          els.balanceList.innerHTML = '<li class="empty">Balances appear after people are added.</li>';
+        } else {
+          els.balanceList.innerHTML = state.people.map((person) => {
+            const net = nets[person.id] || 0;
+            const className = net > 0 ? "money-positive" : net < 0 ? "money-negative" : "money-neutral";
+            const label = net > 0 ? "gets back" : net < 0 ? "owes overall" : "settled up";
+            return `
+              <li class="balance-row">
+                <div><strong>${escapeHtml(person.name)}</strong><small>${label}</small></div>
+                <span class="balance-money ${className}">${net > 0 ? "+" : net < 0 ? "−" : ""}${formatMoney(Math.abs(net))}</span>
+              </li>
+            `;
+          }).join("");
+        }
+
+        const transfers = state.simplify ? matchBalances(nets) : rawTransfers();
+        if (!transfers.length) {
+          els.settlementList.innerHTML = '<li class="empty"><strong>All settled up</strong>No payments are needed.</li>';
+        } else {
+          els.settlementList.innerHTML = transfers.map((transfer) => `
+            <li class="settlement">
+              <strong>${escapeHtml(personById(transfer.from)?.name || "Removed")}</strong>
+              <span class="arrow" aria-label="pays">→</span>
+              <span>${escapeHtml(personById(transfer.to)?.name || "Removed")}</span>
+              <strong>${formatMoney(transfer.amount)}</strong>
+            </li>
+          `).join("");
+        }
+      }
+
+      function openExpenseDialog(expense = null) {
+        if (state.people.length < 1) {
+          els.personName.focus();
+          showToast("Add at least one person first.");
+          return;
+        }
+        editingExpenseId = expense?.id || null;
+        splitMode = expense?.splitMode || "equal";
+        els.dialogTitle.textContent = expense ? "Edit expense" : "Add expense";
+        els.deleteExpenseBtn.hidden = !expense;
+        els.description.value = expense?.description || "";
+        els.date.value = expense?.date || todayString();
+        els.amount.value = expense ? centsToInput(expense.total) : "";
+        els.formError.textContent = "";
+        renderPayerRows(expense);
+        renderOwedRows(expense);
+        updateSplitTabs();
+        updateAllocationPreview();
+        els.dialog.showModal();
+        requestAnimationFrame(() => els.description.focus());
+      }
+
+      function todayString() {
+        const now = new Date();
+        const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+      }
+
+      function renderPayerRows(expense) {
+        els.payerRows.innerHTML = state.people.map((person, index) => `
+          <tr>
+            <td>
+              <div class="table-person"><span class="avatar" aria-hidden="true">${escapeHtml(initials(person.name))}</span>${escapeHtml(person.name)}</div>
+            </td>
+            <td>${index === 0 ? "Payer" : "Optional payer"}</td>
+            <td>
+              <span class="input-group">
+                <span class="input-prefix">${CURRENCIES[state.currency].symbol}</span>
+                <input class="input payer-input" data-id="${person.id}" inputmode="decimal" aria-label="${escapeHtml(person.name)} paid" value="${expense?.paid[person.id] ? centsToInput(expense.paid[person.id]) : ""}" placeholder="0.00">
+              </span>
+            </td>
+          </tr>
+        `).join("");
+      }
+
+      function renderOwedRows(expense) {
+        els.owedRows.innerHTML = state.people.map((person) => {
+          const existingValue = expense?.splitDetails?.[person.id];
+          const included = expense ? (expense.owed[person.id] || 0) > 0 || existingValue === 0 : true;
+          return `
+            <tr>
+              <td>
+                <label class="check-person">
+                  <input class="participant-check" data-id="${person.id}" type="checkbox" ${included ? "checked" : ""}>
+                  <span class="table-person"><span class="avatar" aria-hidden="true">${escapeHtml(initials(person.name))}</span>${escapeHtml(person.name)}</span>
+                </label>
+              </td>
+              <td>${included ? "Included" : "Excluded"}</td>
+              <td>
+                <div class="owed-input-wrap">
+                  <input class="input owed-input" data-id="${person.id}" inputmode="decimal" aria-label="${escapeHtml(person.name)} split value" value="${existingValue ?? defaultSplitValue(expense, person.id)}" ${splitMode === "equal" ? "readonly" : ""} ${included ? "" : "disabled"}>
+                  <span class="unit">${splitUnit()}</span>
+                  <span class="preview" data-preview-id="${person.id}"></span>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+        els.owedColumnTitle.textContent = splitMode === "equal" ? "Owes" : splitMode === "exact" ? "Amount" : splitMode === "percent" ? "Percent" : "Shares";
+      }
+
+      function defaultSplitValue(expense, personId) {
+        if (!expense) return splitMode === "shares" ? "1" : "";
+        if (splitMode === "exact") return centsToInput(expense.owed[personId] || 0);
+        return splitMode === "shares" ? "1" : "";
+      }
+
+      function splitUnit() {
+        if (splitMode === "exact") return CURRENCIES[state.currency].symbol;
+        if (splitMode === "percent") return "%";
+        if (splitMode === "shares") return "×";
+        return "";
+      }
+
+      function setSplitMode(mode) {
+        if (!["equal", "exact", "percent", "shares"].includes(mode) || mode === splitMode) return;
+        splitMode = mode;
+        const draft = captureOwedDraft();
+        renderOwedRows();
+        restoreParticipantSelection(draft);
+        updateSplitTabs();
+        updateAllocationPreview();
+      }
+
+      function captureOwedDraft() {
+        return [...els.owedRows.querySelectorAll(".participant-check")].map((check) => ({
+          id: check.dataset.id,
+          checked: check.checked
+        }));
+      }
+
+      function restoreParticipantSelection(draft) {
+        draft.forEach((item) => {
+          const check = els.owedRows.querySelector(`.participant-check[data-id="${CSS.escape(item.id)}"]`);
+          if (check) check.checked = item.checked;
+          const input = els.owedRows.querySelector(`.owed-input[data-id="${CSS.escape(item.id)}"]`);
+          if (input) input.disabled = !item.checked;
+        });
+      }
+
+      function updateSplitTabs() {
+        els.splitTabs.querySelectorAll(".split-tab").forEach((tab) => {
+          tab.setAttribute("aria-selected", String(tab.dataset.mode === splitMode));
+        });
+      }
+
+      function readAllocation() {
+        const total = parseCents(els.amount.value);
+        const participants = [...els.owedRows.querySelectorAll(".participant-check")]
+          .filter((check) => check.checked)
+          .map((check) => check.dataset.id);
+        if (total === null || total <= 0) return { error: "Enter a valid total greater than zero." };
+        if (!participants.length) return { error: "Include at least one participant." };
+
+        if (splitMode === "equal") {
+          return {
+            owed: allocateByWeights(total, participants.map((id) => ({ id, weight: 1 }))),
+            details: Object.fromEntries(participants.map((id) => [id, 1]))
+          };
+        }
+
+        const values = [];
+        for (const id of participants) {
+          const input = els.owedRows.querySelector(`.owed-input[data-id="${CSS.escape(id)}"]`);
+          const raw = input.value.trim();
+          const value = Number(raw);
+          if (raw === "" || !Number.isFinite(value) || value < 0) {
+            return { error: `Enter a valid ${splitMode === "shares" ? "share" : "value"} for every participant.` };
+          }
+          values.push({ id, value });
+        }
+
+        if (splitMode === "exact") {
+          const owed = {};
+          let sum = 0;
+          for (const entry of values) {
+            const cents = parseCents(String(entry.value));
+            if (cents === null) return { error: "Exact amounts may have at most two decimal places." };
+            owed[entry.id] = cents;
+            sum += cents;
+          }
+          if (sum !== total) return { error: `Exact amounts must total ${formatMoney(total)} (currently ${formatMoney(sum)}).` };
+          return { owed, details: Object.fromEntries(values.map((entry) => [entry.id, entry.value])) };
+        }
+
+        const sum = values.reduce((acc, entry) => acc + entry.value, 0);
+        if (splitMode === "percent" && Math.abs(sum - 100) > 0.000001) {
+          return { error: `Percentages must total 100% (currently ${sum.toFixed(2)}%).` };
+        }
+        if (splitMode === "shares" && sum <= 0) return { error: "Shares must total more than zero." };
+        return {
+          owed: allocateByWeights(total, values.map((entry) => ({ id: entry.id, weight: entry.value }))),
+          details: Object.fromEntries(values.map((entry) => [entry.id, entry.value]))
+        };
+      }
+
+      function readPaid(total) {
+        const paid = {};
+        let sum = 0;
+        for (const input of els.payerRows.querySelectorAll(".payer-input")) {
+          if (!input.value.trim()) continue;
+          const cents = parseCents(input.value);
+          if (cents === null) return { error: "Paid amounts must be valid currency amounts." };
+          if (cents > 0) paid[input.dataset.id] = cents;
+          sum += cents;
+        }
+        if (!Object.keys(paid).length) return { error: "Enter at least one payer contribution." };
+        if (sum !== total) return { error: `Paid amounts must total ${formatMoney(total)} (currently ${formatMoney(sum)}).` };
+        return { paid };
+      }
+
+      function updateAllocationPreview() {
+        const allocation = readAllocation();
+        const total = parseCents(els.amount.value);
+        els.owedRows.querySelectorAll("[data-preview-id]").forEach((preview) => {
+          const value = allocation.owed?.[preview.dataset.previewId];
+          preview.textContent = Number.isInteger(value) ? formatMoney(value) : "";
+        });
+        els.owedStatus.textContent = allocation.error || `Owed total: ${formatMoney(total || 0)}`;
+
+        const inputs = [...els.payerRows.querySelectorAll(".payer-input")];
+        const paidSum = inputs.reduce((sum, input) => sum + (parseCents(input.value) || 0), 0);
+        els.paidStatus.textContent = `Paid total: ${formatMoney(paidSum)}`;
+      }
+
+      function saveExpense(event) {
+        event.preventDefault();
+        els.formError.textContent = "";
+        const description = els.description.value.trim();
+        const total = parseCents(els.amount.value);
+        if (!description) return showFormError("Add a description.");
+        if (!els.date.value) return showFormError("Choose a date.");
+        if (total === null || total <= 0) return showFormError("Enter a valid total greater than zero.");
+
+        const paidResult = readPaid(total);
+        if (paidResult.error) return showFormError(paidResult.error);
+        const allocation = readAllocation();
+        if (allocation.error) return showFormError(allocation.error);
+
+        const existingIndex = state.expenses.findIndex((expense) => expense.id === editingExpenseId);
+        const existing = existingIndex >= 0 ? state.expenses[existingIndex] : null;
+        const expense = {
+          id: existing?.id || makeId("expense"),
+          description,
+          date: els.date.value,
+          total,
+          paid: paidResult.paid,
+          owed: allocation.owed,
+          splitMode,
+          splitDetails: allocation.details,
+          createdAt: existing?.createdAt || Date.now(),
+          updatedAt: Date.now()
+        };
+        if (existingIndex >= 0) state.expenses.splice(existingIndex, 1, expense);
+        else state.expenses.push(expense);
+        saveState();
+        render();
+        els.dialog.close();
+        showToast(existing ? "Expense updated." : "Expense added.");
+      }
+
+      function showFormError(message) {
+        els.formError.textContent = message;
+        els.formError.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+
+      function deleteExpense(id = editingExpenseId) {
+        const expense = state.expenses.find((item) => item.id === id);
+        if (!expense || !confirm(`Delete “${expense.description}”? This cannot be undone.`)) return;
+        state.expenses = state.expenses.filter((item) => item.id !== id);
+        saveState();
+        render();
+        if (els.dialog.open) els.dialog.close();
+        showToast("Expense deleted.");
+      }
+
+      function addPerson(event) {
+        event.preventDefault();
+        const name = els.personName.value.trim();
+        if (!name) return;
+        if (state.people.some((person) => person.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+          showToast("That name is already in the group.");
+          return;
+        }
+        state.people.push({ id: makeId("person"), name });
+        els.personName.value = "";
+        saveState();
+        render();
+        els.personName.focus();
+      }
+
+      function renamePerson(id) {
+        const person = personById(id);
+        if (!person) return;
+        const nextName = prompt("Rename this person:", person.name)?.trim();
+        if (!nextName || nextName === person.name) return;
+        if (state.people.some((item) => item.id !== id && item.name.toLocaleLowerCase() === nextName.toLocaleLowerCase())) {
+          showToast("That name is already in the group.");
+          return;
+        }
+        person.name = nextName.slice(0, 50);
+        saveState();
+        render();
+      }
+
+      function removePerson(id) {
+        const person = personById(id);
+        if (!person) return;
+        const referenced = state.expenses.some((expense) => id in expense.paid || id in expense.owed);
+        if (referenced) {
+          showToast(`${person.name} is part of an expense. Delete or edit those expenses first.`);
+          return;
+        }
+        if (!confirm(`Remove ${person.name} from the group?`)) return;
+        state.people = state.people.filter((item) => item.id !== id);
+        saveState();
+        render();
+      }
+
+      function resetData() {
+        if (!state.people.length && !state.expenses.length) return;
+        if (!confirm("Delete all people and expenses from this browser?")) return;
+        const currency = state.currency;
+        state = emptyState();
+        state.currency = currency;
+        saveState();
+        render();
+        showToast("All data cleared.");
+      }
+
+      function showToast(message) {
+        clearTimeout(toastTimer);
+        els.toast.textContent = message;
+        els.toast.classList.add("show");
+        toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2800);
+      }
+
+      els.personForm.addEventListener("submit", addPerson);
+      els.addExpenseBtn.addEventListener("click", () => openExpenseDialog());
+      els.resetBtn.addEventListener("click", resetData);
+      els.currencySelect.addEventListener("change", () => {
+        state.currency = els.currencySelect.value;
+        saveState();
+        render();
+        if (els.dialog.open) updateAllocationPreview();
+      });
+      els.simplifyToggle.addEventListener("change", () => {
+        state.simplify = els.simplifyToggle.checked;
+        saveState();
+        renderBalances();
+      });
+      els.peopleList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action]");
+        if (!button) return;
+        if (button.dataset.action === "rename-person") renamePerson(button.dataset.id);
+        if (button.dataset.action === "delete-person") removePerson(button.dataset.id);
+      });
+      els.expenseList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='edit-expense']");
+        if (!button) return;
+        openExpenseDialog(state.expenses.find((expense) => expense.id === button.dataset.id));
+      });
+      els.splitTabs.addEventListener("click", (event) => {
+        const tab = event.target.closest("[data-mode]");
+        if (tab) setSplitMode(tab.dataset.mode);
+      });
+      els.amount.addEventListener("input", updateAllocationPreview);
+      els.payerRows.addEventListener("input", updateAllocationPreview);
+      els.owedRows.addEventListener("input", updateAllocationPreview);
+      els.owedRows.addEventListener("change", (event) => {
+        if (!event.target.classList.contains("participant-check")) return;
+        const row = event.target.closest("tr");
+        const input = row.querySelector(".owed-input");
+        input.disabled = !event.target.checked;
+        row.children[1].textContent = event.target.checked ? "Included" : "Excluded";
+        updateAllocationPreview();
+      });
+      els.expenseForm.addEventListener("submit", saveExpense);
+      els.closeDialogBtn.addEventListener("click", () => els.dialog.close());
+      els.cancelExpenseBtn.addEventListener("click", () => els.dialog.close());
+      els.deleteExpenseBtn.addEventListener("click", () => deleteExpense());
+      els.dialog.addEventListener("click", (event) => {
+        if (event.target === els.dialog) els.dialog.close();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

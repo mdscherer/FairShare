@@ -34,4 +34,4 @@ For proportional splits, FairShare uses deterministic largest-remainder allocati
 
 ## Data and privacy
 
-Data is stored only in the current browser using `localStorage`; nothing is uploaded. Clearing site data, using a private browsing session, or choosing **Reset data** removes it. There is no cloud sync or multi-device collaboration.
+Data is stored only for the current browser tab using `sessionStorage`; nothing is uploaded. Closing the tab, clearing site data, or choosing **Reset data** removes it. There is no cloud sync or multi-device collaboration.

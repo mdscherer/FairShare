@@ -815,7 +815,7 @@
 
       function saveState() {
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch {
           showToast("Could not save to this browser.");
         }
@@ -823,7 +823,7 @@
 
       function loadState() {
         try {
-          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
           if (!parsed || !Array.isArray(parsed.people) || !Array.isArray(parsed.expenses)) return emptyState();
           return {
             people: parsed.people.filter((person) => person && typeof person.id === "string" && typeof person.name === "string"),

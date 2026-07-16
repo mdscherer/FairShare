@@ -21,6 +21,7 @@ Open `index.html` in a modern browser. No install, server, account, or internet 
 - Per-person net totals and explicit “who pays whom” settlements
 - Optional debt simplification to reduce the number of payments
 - USD, EUR, GBP, CAD, and AUD display formats
+- JSON import and export for transferring or backing up data
 - Responsive, keyboard-accessible interface
 - Automatic browser-local persistence and a reset control
 
@@ -34,4 +35,4 @@ For proportional splits, FairShare uses deterministic largest-remainder allocati
 
 ## Data and privacy
 
-Data is stored only for the current browser tab using `sessionStorage`; nothing is uploaded. Closing the tab, clearing site data, or choosing **Reset data** removes it. There is no cloud sync or multi-device collaboration.
+Data is stored only for the current browser tab using `sessionStorage`; nothing is uploaded. Closing the tab, clearing site data, or choosing **Reset data** removes it. Use **Export** to save a JSON backup and **Import** to restore one. There is no cloud sync or multi-device collaboration.

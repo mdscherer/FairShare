@@ -69,6 +69,7 @@
     .brand h1 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
     .brand p { margin: 1px 0 0; color: #c6dcd7; font-size: 12px; }
     .header-actions { display: flex; align-items: center; gap: 10px; }
+    .currency-field { display: flex; align-items: center; gap: 7px; }
 
     .page {
       width: min(1500px, 100%);
@@ -452,14 +453,26 @@
       </div>
     </div>
     <div class="header-actions">
-      <label class="currency-label" for="currencySelect">Currency</label>
-      <select id="currencySelect" class="input" aria-label="Currency">
-        <option value="USD">USD ($)</option>
-        <option value="EUR">EUR (€)</option>
-        <option value="GBP">GBP (£)</option>
-        <option value="CAD">CAD ($)</option>
-        <option value="AUD">AUD ($)</option>
-      </select>
+      <div class="currency-field">
+        <label class="currency-label" for="currencySelect">Expenses</label>
+        <select id="currencySelect" class="input" aria-label="Expense currency">
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="CAD">CAD ($)</option>
+          <option value="AUD">AUD ($)</option>
+        </select>
+      </div>
+      <div class="currency-field">
+        <label class="currency-label" for="resultCurrencySelect">Results</label>
+        <select id="resultCurrencySelect" class="input" aria-label="Results currency" title="Loading exchange rates" disabled>
+          <option value="USD">USD ($)</option>
+          <option value="EUR">EUR (€)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="CAD">CAD ($)</option>
+          <option value="AUD">AUD ($)</option>
+        </select>
+      </div>
     </div>
   </header>
 
@@ -624,10 +637,12 @@
         people: [],
         expenses: [],
         currency: "USD",
+        resultCurrency: "USD",
         simplify: true
       });
 
       let state = loadState();
+      let exchangeRates = null;
       let editingExpenseId = null;
       let splitMode = "equal";
       let toastTimer = null;
@@ -635,6 +650,7 @@
       const $ = (selector) => document.querySelector(selector);
       const els = {
         currencySelect: $("#currencySelect"),
+        resultCurrencySelect: $("#resultCurrencySelect"),
         peopleCount: $("#peopleCount"),
         personForm: $("#personForm"),
         personName: $("#personName"),
@@ -695,11 +711,59 @@
       }
 
       function formatMoney(cents) {
-        const config = CURRENCIES[state.currency] || CURRENCIES.USD;
+        return formatCurrency(cents, state.currency);
+      }
+
+      function formatCurrency(cents, currency) {
+        const config = CURRENCIES[currency] || CURRENCIES.USD;
         return new Intl.NumberFormat(config.locale, {
           style: "currency",
-          currency: state.currency
+          currency
         }).format((cents || 0) / 100);
+      }
+
+      function formatResultMoney(cents) {
+        const target = state.resultCurrency || state.currency;
+        if (target === state.currency) return formatCurrency(cents, target);
+        const sourceRate = exchangeRates?.[state.currency];
+        const targetRate = exchangeRates?.[target];
+        if (!sourceRate || !targetRate) return formatCurrency(cents, state.currency);
+        return formatCurrency(Math.round(cents * targetRate / sourceRate), target);
+      }
+
+      async function loadExchangeRates() {
+        try {
+          const response = await fetch("exchange-rates.json", { cache: "no-store" });
+          if (!response.ok) throw new Error(`Exchange-rate request failed with status ${response.status}.`);
+          const data = await response.json();
+          if (!data || typeof data !== "object" || !CURRENCIES[data.base] ||
+              !data.rates || typeof data.rates !== "object") {
+            throw new Error("The exchange-rate file has an invalid format.");
+          }
+          const rates = {};
+          Object.keys(CURRENCIES).forEach((currency) => {
+            const rate = data.rates[currency];
+            if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+              throw new Error(`The exchange-rate file is missing a valid ${currency} rate.`);
+            }
+            rates[currency] = rate;
+          });
+          exchangeRates = rates;
+          els.resultCurrencySelect.disabled = false;
+          els.resultCurrencySelect.title = data.updatedAt
+            ? `Exchange rates updated ${data.updatedAt}`
+            : `Rates relative to ${data.base}`;
+          renderBalances();
+        } catch (error) {
+          console.error(error);
+          state.resultCurrency = state.currency;
+          saveState();
+          els.resultCurrencySelect.value = state.resultCurrency;
+          els.resultCurrencySelect.disabled = true;
+          els.resultCurrencySelect.title = "Exchange rates are unavailable";
+          renderBalances();
+          showToast("Could not load exchange rates. Results remain in the expense currency.");
+        }
       }
 
       function allocateByWeights(totalCents, entries) {
@@ -829,6 +893,7 @@
             people: parsed.people.filter((person) => person && typeof person.id === "string" && typeof person.name === "string"),
             expenses: parsed.expenses.filter(isValidStoredExpense),
             currency: CURRENCIES[parsed.currency] ? parsed.currency : "USD",
+            resultCurrency: CURRENCIES[parsed.resultCurrency] ? parsed.resultCurrency : (CURRENCIES[parsed.currency] ? parsed.currency : "USD"),
             simplify: parsed.simplify !== false
           };
         } catch {
@@ -846,6 +911,92 @@
           expense.owed && typeof expense.owed === "object";
       }
 
+<<<<<<< Updated upstream
+=======
+      function parseImportedState(value) {
+        if (!value || typeof value !== "object" || !Array.isArray(value.people) || !Array.isArray(value.expenses)) {
+          throw new Error("The JSON file is not a FairShare export.");
+        }
+
+        const safeId = /^[A-Za-z][A-Za-z0-9_-]{0,99}$/;
+        const personIds = new Set();
+        const personNames = new Set();
+        const people = value.people.map((person) => {
+          const name = typeof person?.name === "string" ? person.name.trim() : "";
+          if (!person || typeof person.id !== "string" || !safeId.test(person.id) || personIds.has(person.id) ||
+              !name || name.length > 50 || personNames.has(name.toLocaleLowerCase())) {
+            throw new Error("The file contains invalid people data.");
+          }
+          personIds.add(person.id);
+          personNames.add(name.toLocaleLowerCase());
+          return { id: person.id, name };
+        });
+
+        const expenseIds = new Set();
+        const expenses = value.expenses.map((expense) => {
+          if (!expense || typeof expense.id !== "string" || !safeId.test(expense.id) || expenseIds.has(expense.id) ||
+              typeof expense.description !== "string" || !expense.description.trim() || expense.description.trim().length > 100 ||
+              typeof expense.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(expense.date) ||
+              Number.isNaN(new Date(`${expense.date}T12:00:00`).getTime()) ||
+              !Number.isSafeInteger(expense.total) || expense.total <= 0 ||
+              !["equal", "exact", "percent", "shares"].includes(expense.splitMode)) {
+            throw new Error("The file contains invalid expense data.");
+          }
+          expenseIds.add(expense.id);
+
+          const readAmounts = (amounts) => {
+            if (!amounts || typeof amounts !== "object" || Array.isArray(amounts)) {
+              throw new Error("The file contains invalid expense allocations.");
+            }
+            const entries = Object.entries(amounts);
+            if (!entries.length || entries.some(([id, amount]) =>
+              !personIds.has(id) || !Number.isSafeInteger(amount) || amount < 0
+            )) {
+              throw new Error("The file contains invalid expense allocations.");
+            }
+            return Object.fromEntries(entries);
+          };
+
+          const paid = readAmounts(expense.paid);
+          const owed = readAmounts(expense.owed);
+          if (Object.values(paid).reduce((sum, amount) => sum + amount, 0) !== expense.total ||
+              Object.values(owed).reduce((sum, amount) => sum + amount, 0) !== expense.total) {
+            throw new Error("An imported expense does not balance.");
+          }
+
+          const splitDetails = {};
+          if (expense.splitDetails && typeof expense.splitDetails === "object" && !Array.isArray(expense.splitDetails)) {
+            Object.entries(expense.splitDetails).forEach(([id, amount]) => {
+              if (personIds.has(id) && Number.isFinite(amount) && amount >= 0) splitDetails[id] = amount;
+            });
+          }
+
+          return {
+            id: expense.id,
+            description: expense.description.trim(),
+            date: expense.date,
+            total: expense.total,
+            paid,
+            owed,
+            splitMode: expense.splitMode,
+            splitDetails,
+            createdAt: Number.isFinite(expense.createdAt) ? expense.createdAt : Date.now(),
+            updatedAt: Number.isFinite(expense.updatedAt) ? expense.updatedAt : Date.now()
+          };
+        });
+
+        return {
+          people,
+          expenses,
+          currency: CURRENCIES[value.currency] ? value.currency : "USD",
+          resultCurrency: CURRENCIES[value.resultCurrency]
+            ? value.resultCurrency
+            : (CURRENCIES[value.currency] ? value.currency : "USD"),
+          simplify: value.simplify !== false
+        };
+      }
+
+>>>>>>> Stashed changes
       function personById(id) {
         return state.people.find((person) => person.id === id);
       }
@@ -856,6 +1007,11 @@
 
       function render() {
         els.currencySelect.value = state.currency;
+        els.currencySelect.disabled = state.expenses.length > 0;
+        els.currencySelect.title = state.expenses.length > 0
+          ? "Reset or remove all expenses to change the expense currency"
+          : "Currency used when entering expenses";
+        els.resultCurrencySelect.value = state.resultCurrency;
         els.currencySymbol.textContent = CURRENCIES[state.currency].symbol;
         els.simplifyToggle.checked = state.simplify;
         renderPeople();
@@ -928,7 +1084,7 @@
       function renderBalances() {
         const total = state.expenses.reduce((sum, expense) => sum + expense.total, 0);
         const nets = calculateNets();
-        els.totalSpending.textContent = formatMoney(total);
+        els.totalSpending.textContent = formatResultMoney(total);
 
         if (!state.people.length) {
           els.balanceList.innerHTML = '<li class="empty">Balances appear after people are added.</li>';
@@ -940,7 +1096,7 @@
             return `
               <li class="balance-row">
                 <div><strong>${escapeHtml(person.name)}</strong><small>${label}</small></div>
-                <span class="balance-money ${className}">${net > 0 ? "+" : net < 0 ? "−" : ""}${formatMoney(Math.abs(net))}</span>
+                <span class="balance-money ${className}">${net > 0 ? "+" : net < 0 ? "−" : ""}${formatResultMoney(Math.abs(net))}</span>
               </li>
             `;
           }).join("");
@@ -955,7 +1111,7 @@
               <strong>${escapeHtml(personById(transfer.from)?.name || "Removed")}</strong>
               <span class="arrow" aria-label="pays">→</span>
               <span>${escapeHtml(personById(transfer.to)?.name || "Removed")}</span>
-              <strong>${formatMoney(transfer.amount)}</strong>
+              <strong>${formatResultMoney(transfer.amount)}</strong>
             </li>
           `).join("");
         }
@@ -1254,8 +1410,10 @@
         if (!state.people.length && !state.expenses.length) return;
         if (!confirm("Delete all people and expenses from this browser?")) return;
         const currency = state.currency;
+        const resultCurrency = state.resultCurrency;
         state = emptyState();
         state.currency = currency;
+        state.resultCurrency = resultCurrency;
         saveState();
         render();
         showToast("All data cleared.");
@@ -1276,6 +1434,11 @@
         saveState();
         render();
         if (els.dialog.open) updateAllocationPreview();
+      });
+      els.resultCurrencySelect.addEventListener("change", () => {
+        state.resultCurrency = els.resultCurrencySelect.value;
+        saveState();
+        renderBalances();
       });
       els.simplifyToggle.addEventListener("change", () => {
         state.simplify = els.simplifyToggle.checked;
@@ -1317,6 +1480,7 @@
       });
 
       render();
+      loadExchangeRates();
     })();
   </script>
 </body>

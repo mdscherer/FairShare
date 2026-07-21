@@ -484,6 +484,9 @@
       </div>
       <div class="toolbar-actions">
         <button id="addExpenseBtn" class="btn btn-primary" type="button">＋ Add expense</button>
+        <button id="importBtn" class="btn btn-secondary" type="button">Import</button>
+        <button id="exportBtn" class="btn btn-secondary" type="button">Export</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden>
       </div>
     </section>
 
@@ -656,6 +659,9 @@
         personName: $("#personName"),
         peopleList: $("#peopleList"),
         addExpenseBtn: $("#addExpenseBtn"),
+        importBtn: $("#importBtn"),
+        exportBtn: $("#exportBtn"),
+        importFile: $("#importFile"),
         expenseCount: $("#expenseCount"),
         expenseList: $("#expenseList"),
         expensesEmpty: $("#expensesEmpty"),
@@ -911,8 +917,6 @@
           expense.owed && typeof expense.owed === "object";
       }
 
-<<<<<<< Updated upstream
-=======
       function parseImportedState(value) {
         if (!value || typeof value !== "object" || !Array.isArray(value.people) || !Array.isArray(value.expenses)) {
           throw new Error("The JSON file is not a FairShare export.");
@@ -996,7 +1000,6 @@
         };
       }
 
->>>>>>> Stashed changes
       function personById(id) {
         return state.people.find((person) => person.id === id);
       }
@@ -1419,6 +1422,39 @@
         showToast("All data cleared.");
       }
 
+      function exportData() {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `fairshare-${todayString()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        showToast("Data exported.");
+      }
+
+      async function importData(event) {
+        const [file] = event.target.files;
+        if (!file) return;
+        try {
+          if (file.size > 5 * 1024 * 1024) throw new Error("The JSON file is too large.");
+          const importedState = parseImportedState(JSON.parse(await file.text()));
+          if ((state.people.length || state.expenses.length) &&
+              !confirm("Replace all current people and expenses with the imported data?")) return;
+          state = importedState;
+          saveState();
+          render();
+          if (els.dialog.open) els.dialog.close();
+          showToast("Data imported.");
+        } catch (error) {
+          showToast(error instanceof SyntaxError ? "The selected file is not valid JSON." : error.message);
+        } finally {
+          event.target.value = "";
+        }
+      }
+
       function showToast(message) {
         clearTimeout(toastTimer);
         els.toast.textContent = message;
@@ -1428,6 +1464,9 @@
 
       els.personForm.addEventListener("submit", addPerson);
       els.addExpenseBtn.addEventListener("click", () => openExpenseDialog());
+      els.importBtn.addEventListener("click", () => els.importFile.click());
+      els.exportBtn.addEventListener("click", exportData);
+      els.importFile.addEventListener("change", importData);
       els.resetBtn.addEventListener("click", resetData);
       els.currencySelect.addEventListener("change", () => {
         state.currency = els.currencySelect.value;

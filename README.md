@@ -20,12 +20,9 @@ Serve this directory with any static web server, then open `index.html` in a mod
 - Edit and delete expenses; rename and remove unused people
 - Per-person net totals and explicit “who pays whom” settlements
 - Optional debt simplification to reduce the number of payments
-<<<<<<< Updated upstream
 - USD, EUR, GBP, CAD, and AUD display formats
-=======
 - Conversion of results between USD, EUR, GBP, CAD, and AUD
 - JSON import and export for transferring or backing up data
->>>>>>> Stashed changes
 - Responsive, keyboard-accessible interface
 - Automatic browser-local persistence and a reset control
 
@@ -41,4 +38,4 @@ For proportional splits, FairShare uses deterministic largest-remainder allocati
 
 ## Data and privacy
 
-Data is stored only for the current browser tab using `sessionStorage`; nothing is uploaded. Closing the tab, clearing site data, or choosing **Reset data** removes it. There is no cloud sync or multi-device collaboration.
+Data is stored only for the current browser tab using `sessionStorage`; nothing is uploaded. Closing the tab, clearing site data, or choosing **Reset data** removes it. Use **Export** to save a JSON backup and **Import** to restore one. There is no cloud sync or multi-device collaboration.

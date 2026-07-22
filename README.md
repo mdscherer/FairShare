@@ -1,6 +1,6 @@
 # FairShare Bill Splitter
 
-A private, dependency-free bill splitter. The project layout uses [`index.html`](index.html) for markup, [`css/styles.css`](css/styles.css) for styles, [`js/app.js`](js/app.js) for application logic, and [`assets/exchange-rates.json`](assets/exchange-rates.json) for exchange rates.
+A private bill splitter using Font Awesome for interface icons. The project layout uses [`index.html`](index.html) for markup, [`css/styles.css`](css/styles.css) for styles, [`js/app.js`](js/app.js) for application logic, and [`assets/exchange-rates.json`](assets/exchange-rates.json) for exchange rates.
 
 ## Use it
 
@@ -18,6 +18,7 @@ Serve this directory with any static web server, then open `index.html` in a mod
 - Per-expense participant exclusion
 - Equal, exact, percentage, and weighted-share splits
 - Edit and delete expenses; rename and remove unused people
+- Switchable list and grid views for expenses
 - Per-person net totals and explicit “who pays whom” settlements
 - Optional debt simplification to reduce the number of payments
 - USD, EUR, GBP, CAD, and AUD display formats

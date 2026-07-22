@@ -15,6 +15,7 @@
         expenses: [],
         currency: "USD",
         resultCurrency: "USD",
+        expenseView: "grid",
         simplify: true
       });
 
@@ -37,7 +38,11 @@
         exportBtn: $("#exportBtn"),
         importFile: $("#importFile"),
         expenseCount: $("#expenseCount"),
+        listViewBtn: $("#listViewBtn"),
+        gridViewBtn: $("#gridViewBtn"),
         expenseList: $("#expenseList"),
+        expenseTable: $("#expenseTable"),
+        expenseTableBody: $("#expenseTableBody"),
         expensesEmpty: $("#expensesEmpty"),
         totalSpending: $("#totalSpending"),
         simplifyToggle: $("#simplifyToggle"),
@@ -274,6 +279,7 @@
             expenses: parsed.expenses.filter(isValidStoredExpense),
             currency: CURRENCIES[parsed.currency] ? parsed.currency : "USD",
             resultCurrency: CURRENCIES[parsed.resultCurrency] ? parsed.resultCurrency : (CURRENCIES[parsed.currency] ? parsed.currency : "USD"),
+            expenseView: parsed.expenseView === "list" ? "list" : "grid",
             simplify: parsed.simplify !== false
           };
         } catch {
@@ -370,6 +376,7 @@
           resultCurrency: CURRENCIES[value.resultCurrency]
             ? value.resultCurrency
             : (CURRENCIES[value.currency] ? value.currency : "USD"),
+          expenseView: value.expenseView === "list" ? "list" : "grid",
           simplify: value.simplify !== false
         };
       }
@@ -415,10 +422,33 @@
       }
 
       function renderExpenses() {
-        els.expensesEmpty.hidden = state.expenses.length > 0;
-        els.expenseList.hidden = state.expenses.length === 0;
+        const hasExpenses = state.expenses.length > 0;
+        const listView = state.expenseView === "list";
+        els.listViewBtn.setAttribute("aria-pressed", String(listView));
+        els.gridViewBtn.setAttribute("aria-pressed", String(!listView));
+        els.expensesEmpty.hidden = hasExpenses;
+        els.expenseList.hidden = !hasExpenses || listView;
+        els.expenseTable.hidden = !hasExpenses || !listView;
         els.expenseCount.textContent = `${state.expenses.length} ${state.expenses.length === 1 ? "purchase" : "purchases"}`;
         const sorted = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+
+        if (listView) {
+          els.expenseList.innerHTML = "";
+          els.expenseTableBody.innerHTML = sorted.map((expense) => `
+            <tr>
+              <td><time datetime="${escapeHtml(expense.date)}">${escapeHtml(formatExpenseDate(expense.date))}</time></td>
+              <td>
+                <button class="expense-list-edit" type="button" data-action="edit-expense" data-id="${expense.id}">
+                  ${escapeHtml(expense.description)}
+                </button>
+              </td>
+              <td class="expense-table-amount">${formatMoney(expense.total)}</td>
+            </tr>
+          `).join("");
+          return;
+        }
+
+        els.expenseTableBody.innerHTML = "";
         els.expenseList.innerHTML = sorted.map((expense) => {
           const date = parseLocalDate(expense.date);
           const paidNames = Object.entries(expense.paid)
@@ -443,6 +473,12 @@
             </li>
           `;
         }).join("");
+      }
+
+      function formatExpenseDate(value) {
+        const date = new Date(`${value}T12:00:00`);
+        if (Number.isNaN(date.getTime())) return "—";
+        return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
       }
 
       function parseLocalDate(value) {
@@ -788,9 +824,11 @@
         if (!confirm("Delete all people and expenses from this browser?")) return;
         const currency = state.currency;
         const resultCurrency = state.resultCurrency;
+        const expenseView = state.expenseView;
         state = emptyState();
         state.currency = currency;
         state.resultCurrency = resultCurrency;
+        state.expenseView = expenseView;
         saveState();
         render();
         showToast("All data cleared.");
@@ -853,6 +891,13 @@
         saveState();
         renderBalances();
       });
+      function setExpenseView(view) {
+        state.expenseView = view === "list" ? "list" : "grid";
+        saveState();
+        renderExpenses();
+      }
+      els.listViewBtn.addEventListener("click", () => setExpenseView("list"));
+      els.gridViewBtn.addEventListener("click", () => setExpenseView("grid"));
       els.simplifyToggle.addEventListener("change", () => {
         state.simplify = els.simplifyToggle.checked;
         saveState();
@@ -865,6 +910,11 @@
         if (button.dataset.action === "delete-person") removePerson(button.dataset.id);
       });
       els.expenseList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='edit-expense']");
+        if (!button) return;
+        openExpenseDialog(state.expenses.find((expense) => expense.id === button.dataset.id));
+      });
+      els.expenseTableBody.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-action='edit-expense']");
         if (!button) return;
         openExpenseDialog(state.expenses.find((expense) => expense.id === button.dataset.id));

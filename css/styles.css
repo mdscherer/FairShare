@@ -105,6 +105,37 @@
     }
     .panel-head h3 { margin: 0; font-size: 16px; }
     .panel-body { padding: 16px 18px; }
+    .expense-head-actions { display: flex; align-items: center; gap: 12px; }
+    .view-buttons {
+      display: inline-flex;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: white;
+    }
+    .view-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 34px;
+      padding: 5px 11px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      color: var(--muted);
+      background: white;
+      font-size: 12px;
+      font-weight: 700;
+      transition: 150ms ease;
+    }
+    .view-button:first-child { border-radius: 8px 0 0 8px; }
+    .view-button:last-child { border-right: 0; border-radius: 0 8px 8px 0; }
+    .view-button:hover { color: var(--ink); background: var(--soft); }
+    .view-button[aria-pressed="true"] {
+      color: var(--brand-dark);
+      background: var(--brand-soft);
+      box-shadow: inset 0 0 0 1px rgba(22, 133, 111, 0.2);
+    }
 
     .btn {
       display: inline-flex;
@@ -233,6 +264,47 @@
     .expense-side { text-align: right; }
     .expense-amount { font-size: 16px; font-weight: 850; }
     .expense-buttons { display: flex; justify-content: flex-end; margin-top: 5px; }
+    .expense-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .expense-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+    }
+    .expense-table th {
+      padding: 9px 11px;
+      color: var(--muted);
+      background: var(--soft);
+      font-size: 11px;
+      letter-spacing: .05em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+    .expense-table th:last-child { text-align: right; }
+    .expense-table td {
+      padding: 10px 11px;
+      border-top: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .expense-table tbody tr:hover { background: var(--soft); }
+    .expense-table time { color: var(--muted); white-space: nowrap; font-size: 12px; }
+    .expense-table-amount { text-align: right; white-space: nowrap; font-weight: 850; }
+    .expense-list-edit {
+      max-width: 100%;
+      padding: 0;
+      overflow: hidden;
+      border: 0;
+      color: var(--ink);
+      background: transparent;
+      font-weight: 750;
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .expense-list-edit:hover { color: var(--brand-dark); text-decoration: underline; }
 
     .summary-total {
       padding: 15px;
@@ -431,6 +503,8 @@
     }
 
     @media (max-width: 430px) {
+      .expense-panel-head { align-items: stretch; flex-direction: column; }
+      .expense-head-actions { justify-content: space-between; }
       .form-grid { grid-template-columns: 1fr; }
       .form-grid .field:first-child { grid-column: auto; }
       .dialog-foot { align-items: stretch; flex-direction: column-reverse; }

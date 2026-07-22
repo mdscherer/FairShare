@@ -1,6 +1,6 @@
 # FairShare Bill Splitter
 
-A private, dependency-free bill splitter. The app is contained in [`index.html`](index.html), with exchange rates supplied by [`exchange-rates.json`](exchange-rates.json).
+A private, dependency-free bill splitter. The project layout uses [`index.html`](index.html) for markup, [`css/styles.css`](css/styles.css) for styles, [`js/app.js`](js/app.js) for application logic, and [`assets/exchange-rates.json`](assets/exchange-rates.json) for exchange rates.
 
 ## Use it
 
@@ -30,7 +30,7 @@ Serve this directory with any static web server, then open `index.html` in a mod
 
 Money is represented internally as integer cents. Payer contributions and participant obligations must each equal the expense total before it can be saved.
 
-Expenses remain stored in the selected expense currency, which is locked while expenses exist. Totals, balances, and suggested payments are converted for display into the selected results currency using the rates in `exchange-rates.json`. Rates are relative to the file's `base` currency and converted amounts are rounded to the nearest cent.
+Expenses remain stored in the selected expense currency, which is locked while expenses exist. Totals, balances, and suggested payments are converted for display into the selected results currency using the rates in [`assets/exchange-rates.json`](assets/exchange-rates.json). Rates are relative to the file's `base` currency and converted amounts are rounded to the nearest cent.
 
 For proportional splits, FairShare uses deterministic largest-remainder allocation. Whole cents are assigned first, then leftover cents go to participants with the largest fractional remainders in group order. This guarantees that every split sums exactly to the original expense.
 

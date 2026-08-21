@@ -23,6 +23,7 @@ async function createApp(options = {}) {
   if (process.env.NODE_ENV === "production") app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.use(helmet({
+    strictTransportSecurity: process.env.NODE_ENV === "production" ? {} : false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -30,7 +31,8 @@ async function createApp(options = {}) {
         fontSrc: ["'self'", "https://cdnjs.cloudflare.com", "data:"],
         scriptSrc: ["'self'"],
         connectSrc: ["'self'", "ws:", "wss:"],
-        imgSrc: ["'self'", "data:"]
+        imgSrc: ["'self'", "data:"],
+        upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null
       }
     }
   }));

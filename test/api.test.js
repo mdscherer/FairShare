@@ -59,6 +59,14 @@ test("report APIs require authentication", async (t) => {
   assert.equal(response.status, 401);
 });
 
+test("development HTTP responses do not instruct browsers to upgrade to HTTPS", async (t) => {
+  const base = await serverFixture(t);
+  const response = await fetch(base);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.has("strict-transport-security"), false);
+  assert.equal(response.headers.get("content-security-policy")?.includes("upgrade-insecure-requests"), false);
+});
+
 test("report APIs create and return validated state", async (t) => {
   const base = await serverFixture(t);
   const created = await fetch(`${base}/api/reports`, {

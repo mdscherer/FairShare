@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A private, standalone bill splitter for groups.">
+  <meta name="description" content="A collaborative bill splitter for groups.">
   <title>FairShare — Bill Splitter</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <link rel="stylesheet" href="css/styles.css">
@@ -18,6 +18,9 @@
       </div>
     </div>
     <div class="header-actions">
+      <div id="accountStatus" class="account-status" aria-live="polite">Local draft</div>
+      <button id="signInBtn" class="btn btn-header" type="button">Sign in with Google</button>
+      <button id="signOutBtn" class="btn btn-header" type="button" hidden>Sign out</button>
       <div class="currency-field">
         <label class="currency-label" for="currencySelect">Expenses</label>
         <select id="currencySelect" class="input" aria-label="Expense currency">
@@ -43,14 +46,25 @@
 
   <main class="page">
     <section class="toolbar" aria-labelledby="pageTitle">
-      <div>
-        <h2 id="pageTitle">Group expenses</h2>
-        <p>Everyone's spending and balances in one place.</p>
+      <div class="report-fields">
+        <h2 id="pageTitle">Expense report</h2>
+        <label class="field report-name-field">
+          <span class="field-label">Report name</span>
+          <input id="reportName" class="input" maxlength="100" placeholder="e.g. Summer road trip" required>
+        </label>
+        <label class="field report-select-field">
+          <span class="field-label">Saved reports</span>
+          <select id="reportSelect" class="input" disabled>
+            <option value="">Local draft</option>
+          </select>
+        </label>
       </div>
       <div class="toolbar-actions">
         <button id="addExpenseBtn" class="btn btn-primary" type="button">＋ Add expense</button>
+        <button id="newReportBtn" class="btn btn-secondary" type="button">New report</button>
+        <button id="saveBtn" class="btn btn-secondary" type="button" disabled>Save</button>
+        <button id="shareBtn" class="btn btn-secondary" type="button" hidden>Share</button>
         <button id="importBtn" class="btn btn-secondary" type="button">Import</button>
-        <button id="exportBtn" class="btn btn-secondary" type="button">Export</button>
         <input id="importFile" type="file" accept="application/json,.json" hidden>
       </div>
     </section>
@@ -136,7 +150,7 @@
         </div>
       </section>
     </div>
-    <p class="privacy-note">Your data stays in this browser. Nothing is uploaded.</p>
+    <p id="privacyNote" class="privacy-note">Local drafts stay in this browser. Signed-in reports are autosaved and may be shared with invited collaborators.</p>
   </main>
 
   <dialog id="expenseDialog" aria-labelledby="dialogTitle">
@@ -202,6 +216,36 @@
         </div>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="shareDialog" aria-labelledby="shareDialogTitle">
+    <div class="dialog-form">
+      <div class="dialog-head">
+        <h2 id="shareDialogTitle">Share report</h2>
+        <button id="closeShareBtn" class="icon-btn" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="dialog-body sharing-body">
+        <form id="inviteForm" class="share-form">
+          <label class="field">
+            <span class="field-label">Invite a Google account</span>
+            <input id="inviteEmail" class="input" type="email" maxlength="254" placeholder="person@example.com" required>
+          </label>
+          <button class="btn btn-primary" type="submit">Invite editor</button>
+        </form>
+        <div>
+          <div class="section-heading"><h3>People with access</h3></div>
+          <ul id="sharingPeople" class="sharing-list"></ul>
+        </div>
+        <div>
+          <div class="section-heading">
+            <h3>Private edit links</h3>
+            <button id="createLinkBtn" class="btn btn-secondary" type="button">Create link</button>
+          </div>
+          <p class="split-help">Anyone who signs in with this link becomes an editor. Revoke unused links when they are no longer needed.</p>
+          <ul id="sharingLinks" class="sharing-list"></ul>
+        </div>
+      </div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

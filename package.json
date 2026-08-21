@@ -1,0 +1,26 @@
+{
+  "name": "fairshare",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Collaborative expense reports with Google sign-in",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "update:exchange-rates": "node scripts/update-exchange-rates.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "latest",
+    "express": "latest",
+    "express-session": "latest",
+    "helmet": "latest",
+    "passport": "latest",
+    "passport-google-oauth20": "latest",
+    "session-file-store": "latest",
+    "ws": "latest"
+  }
+}

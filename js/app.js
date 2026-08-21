@@ -2,6 +2,9 @@
       "use strict";
 
       const STORAGE_KEY = "fairshare.bill-splitter.v1";
+      const REPORT_META_KEY = "fairshare.report-meta.v1";
+      const SHARE_TOKEN_KEY = "fairshare.pending-share-token";
+      const SAVE_AFTER_AUTH_KEY = "fairshare.save-after-auth";
       const CURRENCIES = {
         USD: { locale: "en-US", symbol: "$" },
         EUR: { locale: "de-DE", symbol: "€" },
@@ -24,6 +27,16 @@
       let editingExpenseId = null;
       let splitMode = "equal";
       let toastTimer = null;
+      let authUser = null;
+      let googleEnabled = true;
+      let reports = [];
+      let reportMeta = loadReportMeta();
+      let dirty = !reportMeta.id && Boolean(state.people.length || state.expenses.length);
+      let saveTimer = null;
+      let saveInFlight = null;
+      let socket = null;
+      let reconnectTimer = null;
+      let activeShareLinks = new Map();
 
       const $ = (selector) => document.querySelector(selector);
       const els = {
@@ -33,9 +46,16 @@
         personForm: $("#personForm"),
         personName: $("#personName"),
         peopleList: $("#peopleList"),
+        accountStatus: $("#accountStatus"),
+        signInBtn: $("#signInBtn"),
+        signOutBtn: $("#signOutBtn"),
+        reportName: $("#reportName"),
+        reportSelect: $("#reportSelect"),
+        newReportBtn: $("#newReportBtn"),
+        saveBtn: $("#saveBtn"),
+        shareBtn: $("#shareBtn"),
         addExpenseBtn: $("#addExpenseBtn"),
         importBtn: $("#importBtn"),
-        exportBtn: $("#exportBtn"),
         importFile: $("#importFile"),
         expenseCount: $("#expenseCount"),
         listViewBtn: $("#listViewBtn"),
@@ -66,6 +86,14 @@
         closeDialogBtn: $("#closeDialogBtn"),
         cancelExpenseBtn: $("#cancelExpenseBtn"),
         deleteExpenseBtn: $("#deleteExpenseBtn"),
+        privacyNote: $("#privacyNote"),
+        shareDialog: $("#shareDialog"),
+        closeShareBtn: $("#closeShareBtn"),
+        inviteForm: $("#inviteForm"),
+        inviteEmail: $("#inviteEmail"),
+        sharingPeople: $("#sharingPeople"),
+        createLinkBtn: $("#createLinkBtn"),
+        sharingLinks: $("#sharingLinks"),
         toast: $("#toast")
       };
 
@@ -262,12 +290,36 @@
         return result;
       }
 
-      function saveState() {
+      function saveState({ remote = true } = {}) {
         try {
           sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
         } catch {
           showToast("Could not save to this browser.");
         }
+        if (remote) {
+          dirty = true;
+          scheduleSave();
+          renderReportControls();
+        }
+      }
+
+      function loadReportMeta() {
+        try {
+          const value = JSON.parse(sessionStorage.getItem(REPORT_META_KEY));
+          return {
+            id: typeof value?.id === "string" ? value.id : null,
+            title: typeof value?.title === "string" ? value.title : "",
+            revision: Number.isInteger(value?.revision) ? value.revision : 0,
+            role: value?.role === "owner" || value?.role === "editor" ? value.role : null,
+            owner: value?.owner || null
+          };
+        } catch {
+          return { id: null, title: "", revision: 0, role: null, owner: null };
+        }
+      }
+
+      function saveReportMeta() {
+        sessionStorage.setItem(REPORT_META_KEY, JSON.stringify(reportMeta));
       }
 
       function loadState() {
@@ -381,6 +433,395 @@
         };
       }
 
+      async function api(path, options = {}) {
+        const response = await fetch(path, {
+          credentials: "same-origin",
+          ...options,
+          headers: options.body
+            ? { "Content-Type": "application/json", ...(options.headers || {}) }
+            : options.headers
+        });
+        const payload = response.status === 204 ? null : await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(payload?.error || `Request failed (${response.status}).`);
+          error.status = response.status;
+          error.payload = payload;
+          throw error;
+        }
+        return payload;
+      }
+
+      async function initializeAccount() {
+        try {
+          const { user, googleConfigured } = await api("/api/auth/me");
+          authUser = user;
+          googleEnabled = googleConfigured;
+          if (authUser) {
+            await refreshReports();
+            connectSocket();
+            if (reportMeta.id && reports.some((report) => report.id === reportMeta.id)) {
+              await loadReport(reportMeta.id);
+            } else if (reportMeta.id) {
+              reportMeta = { id: null, title: reportMeta.title, revision: 0, role: null, owner: null };
+              dirty = true;
+              saveReportMeta();
+            }
+            await acceptShareLinkFromUrl();
+            if (sessionStorage.getItem(SAVE_AFTER_AUTH_KEY) === "1") {
+              sessionStorage.removeItem(SAVE_AFTER_AUTH_KEY);
+              if (dirty) await saveReport().catch(handleSaveError);
+            }
+          } else {
+            rememberShareToken();
+          }
+        } catch (error) {
+          console.error(error);
+          showToast("Could not connect to the FairShare server.");
+        }
+        renderReportControls();
+      }
+
+      async function refreshReports() {
+        if (!authUser) {
+          reports = [];
+          return;
+        }
+        const payload = await api("/api/reports");
+        reports = payload.reports;
+        renderReportControls();
+      }
+
+      function renderReportControls() {
+        els.accountStatus.textContent = authUser ? `${authUser.name} · ${authUser.email}` : "Local draft";
+        els.signInBtn.hidden = Boolean(authUser);
+        els.signInBtn.disabled = !googleEnabled;
+        els.signInBtn.title = googleEnabled ? "" : "Google sign-in is not configured on this server";
+        els.signOutBtn.hidden = !authUser;
+        els.reportName.value = reportMeta.title;
+        els.reportSelect.disabled = !authUser;
+        const current = reportMeta.id || "";
+        els.reportSelect.innerHTML = '<option value="">Local draft / new report</option>' + reports.map((item) => {
+          const owner = item.role === "editor" ? ` — ${item.owner.name || item.owner.email}` : "";
+          return `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title + owner)}</option>`;
+        }).join("");
+        els.reportSelect.value = reports.some((item) => item.id === current) ? current : "";
+        els.saveBtn.disabled = Boolean(saveInFlight) || !dirty;
+        els.saveBtn.textContent = saveInFlight ? "Saving…" : dirty ? "Save" : "Saved";
+        els.shareBtn.hidden = reportMeta.role !== "owner";
+        els.privacyNote.textContent = reportMeta.id
+          ? "This report is autosaved on the server and updates live for invited collaborators."
+          : "This draft stays in this browser until you sign in and give it a report name.";
+      }
+
+      function scheduleSave() {
+        clearTimeout(saveTimer);
+        if (!authUser || !reportMeta.title.trim()) return;
+        saveTimer = setTimeout(() => saveReport().catch(handleSaveError), 700);
+      }
+
+      async function saveReport() {
+        clearTimeout(saveTimer);
+        if (saveInFlight) return saveInFlight;
+        if (!authUser) {
+          if (!googleEnabled) {
+            showToast("Google sign-in is not configured on this server.");
+            return;
+          }
+          rememberShareToken();
+          sessionStorage.setItem(SAVE_AFTER_AUTH_KEY, "1");
+          window.location.href = `/auth/google?returnTo=${encodeURIComponent(location.pathname + location.search)}`;
+          return;
+        }
+        const title = reportMeta.title.trim();
+        if (!title) {
+          els.reportName.focus();
+          showToast("Enter a report name before saving.");
+          return;
+        }
+        const fingerprint = JSON.stringify({ title, state });
+        saveInFlight = (async () => {
+          const payload = reportMeta.id
+            ? await api(`/api/reports/${encodeURIComponent(reportMeta.id)}`, {
+              method: "PUT",
+              body: JSON.stringify({ title, state, baseRevision: reportMeta.revision })
+            })
+            : await api("/api/reports", {
+              method: "POST",
+              body: JSON.stringify({ title, state })
+            });
+          const pendingTitle = reportMeta.title;
+          const currentFingerprint = JSON.stringify({ title: pendingTitle.trim(), state });
+          applyReportMetadata(payload.report);
+          dirty = currentFingerprint !== fingerprint;
+          if (dirty) {
+            reportMeta.title = pendingTitle;
+            saveReportMeta();
+          }
+          saveState({ remote: false });
+          await refreshReports();
+          subscribeToReport();
+          if (dirty) scheduleSave();
+        })();
+        renderReportControls();
+        try {
+          await saveInFlight;
+        } finally {
+          saveInFlight = null;
+          renderReportControls();
+        }
+      }
+
+      function handleSaveError(error) {
+        console.error(error);
+        dirty = true;
+        if (error.status === 409 && error.payload?.latest) {
+          resolveConflict(error.payload.latest);
+        } else {
+          showToast(error.message || "Could not save this report.");
+        }
+        renderReportControls();
+      }
+
+      function applyReportMetadata(report) {
+        reportMeta = {
+          id: report.id,
+          title: report.title,
+          revision: report.revision,
+          role: report.role,
+          owner: report.owner
+        };
+        saveReportMeta();
+      }
+
+      async function loadReport(reportId) {
+        if (!reportId) return newReport();
+        if (dirty && !confirm("Discard unsaved local changes and load this report?")) {
+          renderReportControls();
+          return;
+        }
+        try {
+          const { report } = await api(`/api/reports/${encodeURIComponent(reportId)}`);
+          state = parseImportedState(report.state);
+          applyReportMetadata(report);
+          dirty = false;
+          saveState({ remote: false });
+          render();
+          subscribeToReport();
+        } catch (error) {
+          showToast(error.message);
+          renderReportControls();
+        }
+      }
+
+      function newReport() {
+        if (dirty && !confirm("Discard unsaved changes and start a new report?")) {
+          renderReportControls();
+          return;
+        }
+        const preferences = {
+          currency: state.currency,
+          resultCurrency: state.resultCurrency,
+          expenseView: state.expenseView,
+          simplify: state.simplify
+        };
+        state = { ...emptyState(), ...preferences };
+        reportMeta = { id: null, title: "", revision: 0, role: null, owner: null };
+        dirty = false;
+        saveState({ remote: false });
+        saveReportMeta();
+        render();
+        subscribeToReport();
+        els.reportName.focus();
+      }
+
+      async function signOut() {
+        if (dirty && !confirm("Sign out with unsaved changes? The local draft will remain in this tab.")) return;
+        await api("/api/auth/logout", { method: "POST", body: "{}" });
+        authUser = null;
+        reports = [];
+        reportMeta = { id: null, title: reportMeta.title, revision: 0, role: null, owner: null };
+        dirty = Boolean(state.people.length || state.expenses.length || reportMeta.title);
+        saveReportMeta();
+        disconnectSocket();
+        renderReportControls();
+      }
+
+      function connectSocket() {
+        if (!authUser || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
+        const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+        socket = new WebSocket(`${protocol}//${location.host}/ws`);
+        socket.addEventListener("open", subscribeToReport);
+        socket.addEventListener("message", handleSocketMessage);
+        socket.addEventListener("close", () => {
+          socket = null;
+          clearTimeout(reconnectTimer);
+          if (authUser) reconnectTimer = setTimeout(async () => {
+            connectSocket();
+            if (reportMeta.id && !dirty) await loadReport(reportMeta.id);
+          }, 1500);
+        });
+      }
+
+      function disconnectSocket() {
+        clearTimeout(reconnectTimer);
+        if (socket) socket.close();
+        socket = null;
+      }
+
+      function subscribeToReport() {
+        if (socket?.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(reportMeta.id
+            ? { type: "subscribe", reportId: reportMeta.id }
+            : { type: "unsubscribe" }));
+        }
+      }
+
+      function handleSocketMessage(event) {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "report" && message.report.id === reportMeta.id) {
+            if (message.report.revision <= reportMeta.revision) return;
+            if (dirty || saveInFlight) resolveConflict(message.report);
+            else applyIncomingReport(message.report);
+          }
+          if (message.type === "access-revoked") {
+            showToast("Your access to this report was removed.");
+            reportMeta = { id: null, title: reportMeta.title, revision: 0, role: null, owner: null };
+            dirty = true;
+            saveReportMeta();
+            saveState({ remote: false });
+            renderReportControls();
+            refreshReports().catch(console.error);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      function applyIncomingReport(report) {
+        state = parseImportedState(report.state);
+        applyReportMetadata(report);
+        dirty = false;
+        saveState({ remote: false });
+        render();
+        showToast("A collaborator updated this report.");
+      }
+
+      function resolveConflict(latest) {
+        const useServer = confirm("A collaborator saved a newer version. Press OK to load it, or Cancel to keep your local draft and save it as the next revision.");
+        if (useServer) {
+          applyIncomingReport(latest);
+        } else {
+          reportMeta.revision = latest.revision;
+          saveReportMeta();
+          dirty = true;
+          scheduleSave();
+          showToast("Local draft kept. It will be saved as the next revision.");
+        }
+      }
+
+      async function acceptShareLinkFromUrl() {
+        const url = new URL(location.href);
+        const fragment = new URLSearchParams(url.hash.slice(1));
+        const token = fragment.get("share") || url.searchParams.get("share") || sessionStorage.getItem(SHARE_TOKEN_KEY);
+        if (!token) return;
+        try {
+          const { report } = await api("/api/invitations/link", {
+            method: "POST",
+            body: JSON.stringify({ token })
+          });
+          url.searchParams.delete("share");
+          fragment.delete("share");
+          url.hash = fragment.toString();
+          sessionStorage.removeItem(SHARE_TOKEN_KEY);
+          history.replaceState({}, "", url);
+          await refreshReports();
+          await loadReport(report.id);
+          showToast("Shared report added.");
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+
+      function rememberShareToken() {
+        const url = new URL(location.href);
+        const token = new URLSearchParams(url.hash.slice(1)).get("share") || url.searchParams.get("share");
+        if (token) sessionStorage.setItem(SHARE_TOKEN_KEY, token);
+      }
+
+      async function openSharing() {
+        if (reportMeta.role !== "owner") return;
+        try {
+          await refreshSharing();
+          els.shareDialog.showModal();
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+
+      async function refreshSharing() {
+        const sharing = await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/sharing`);
+        els.sharingPeople.innerHTML = [
+          ...(reportMeta.owner ? [{
+            id: reportMeta.owner.id,
+            name: reportMeta.owner.name,
+            email: reportMeta.owner.email,
+            owner: true
+          }] : []),
+          ...sharing.editors
+        ].map((person) => `
+          <li class="sharing-row">
+            <span><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.email)}${person.owner ? " · Owner" : " · Editor"}</small></span>
+            ${person.owner ? "" : `<button class="btn btn-danger" type="button" data-remove-editor="${person.id}">Remove</button>`}
+          </li>
+        `).join("") + sharing.invitations.map((invitation) => `
+          <li class="sharing-row">
+            <span><strong>${escapeHtml(invitation.email)}</strong><small>Invitation pending</small></span>
+            <button class="btn btn-danger" type="button" data-remove-invitation="${invitation.id}">Cancel</button>
+          </li>
+        `).join("");
+        els.sharingLinks.innerHTML = sharing.links.map((link) => {
+          const localUrl = activeShareLinks.get(link.id);
+          return `<li class="sharing-row">
+            <span class="sharing-link">${localUrl ? escapeHtml(localUrl) : `Private link created ${escapeHtml(new Date(link.createdAt).toLocaleString())}`}</span>
+            <span>
+              ${localUrl ? `<button class="btn btn-secondary" type="button" data-copy-link="${link.id}">Copy</button>` : ""}
+              <button class="btn btn-danger" type="button" data-revoke-link="${link.id}">Revoke</button>
+            </span>
+          </li>`;
+        }).join("") || '<li class="empty">No active share links.</li>';
+      }
+
+      async function inviteEditor(event) {
+        event.preventDefault();
+        try {
+          await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/invitations`, {
+            method: "POST",
+            body: JSON.stringify({ email: els.inviteEmail.value })
+          });
+          els.inviteEmail.value = "";
+          await refreshSharing();
+          showToast("Invitation added.");
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+
+      async function createShareLink() {
+        try {
+          const { link } = await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/links`, {
+            method: "POST",
+            body: "{}"
+          });
+          const url = new URL(location.origin);
+          url.hash = `share=${encodeURIComponent(link.token)}`;
+          activeShareLinks.set(link.id, url.toString());
+          await refreshSharing();
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+
       function personById(id) {
         return state.people.find((person) => person.id === id);
       }
@@ -401,6 +842,7 @@
         renderPeople();
         renderExpenses();
         renderBalances();
+        renderReportControls();
       }
 
       function renderPeople() {
@@ -821,7 +1263,7 @@
 
       function resetData() {
         if (!state.people.length && !state.expenses.length) return;
-        if (!confirm("Delete all people and expenses from this browser?")) return;
+        if (!confirm("Delete all people and expenses from this report?")) return;
         const currency = state.currency;
         const resultCurrency = state.resultCurrency;
         const expenseView = state.expenseView;
@@ -832,19 +1274,6 @@
         saveState();
         render();
         showToast("All data cleared.");
-      }
-
-      function exportData() {
-        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `fairshare-${todayString()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        showToast("Data exported.");
       }
 
       async function importData(event) {
@@ -875,9 +1304,24 @@
       }
 
       els.personForm.addEventListener("submit", addPerson);
+      els.signInBtn.addEventListener("click", () => {
+        rememberShareToken();
+        window.location.href = `/auth/google?returnTo=${encodeURIComponent(location.pathname + location.search)}`;
+      });
+      els.signOutBtn.addEventListener("click", () => signOut().catch((error) => showToast(error.message)));
+      els.reportName.addEventListener("input", () => {
+        reportMeta.title = els.reportName.value;
+        saveReportMeta();
+        dirty = true;
+        scheduleSave();
+        renderReportControls();
+      });
+      els.reportSelect.addEventListener("change", () => loadReport(els.reportSelect.value));
+      els.newReportBtn.addEventListener("click", newReport);
+      els.saveBtn.addEventListener("click", () => saveReport().catch(handleSaveError));
+      els.shareBtn.addEventListener("click", openSharing);
       els.addExpenseBtn.addEventListener("click", () => openExpenseDialog());
       els.importBtn.addEventListener("click", () => els.importFile.click());
-      els.exportBtn.addEventListener("click", exportData);
       els.importFile.addEventListener("change", importData);
       els.resetBtn.addEventListener("click", resetData);
       els.currencySelect.addEventListener("change", () => {
@@ -941,7 +1385,60 @@
       els.dialog.addEventListener("click", (event) => {
         if (event.target === els.dialog) els.dialog.close();
       });
+      els.closeShareBtn.addEventListener("click", () => els.shareDialog.close());
+      els.shareDialog.addEventListener("click", (event) => {
+        if (event.target === els.shareDialog) els.shareDialog.close();
+      });
+      els.inviteForm.addEventListener("submit", inviteEditor);
+      els.createLinkBtn.addEventListener("click", createShareLink);
+      els.sharingPeople.addEventListener("click", async (event) => {
+        const editorButton = event.target.closest("[data-remove-editor]");
+        const invitationButton = event.target.closest("[data-remove-invitation]");
+        try {
+          if (editorButton) {
+            await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/editors/${encodeURIComponent(editorButton.dataset.removeEditor)}`, {
+              method: "DELETE",
+              body: "{}"
+            });
+          }
+          if (invitationButton) {
+            await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/invitations/${encodeURIComponent(invitationButton.dataset.removeInvitation)}`, {
+              method: "DELETE",
+              body: "{}"
+            });
+          }
+          await refreshSharing();
+        } catch (error) {
+          showToast(error.message);
+        }
+      });
+      els.sharingLinks.addEventListener("click", async (event) => {
+        const copyButton = event.target.closest("[data-copy-link]");
+        const revokeButton = event.target.closest("[data-revoke-link]");
+        try {
+          if (copyButton) {
+            await navigator.clipboard.writeText(activeShareLinks.get(copyButton.dataset.copyLink));
+            showToast("Share link copied.");
+          }
+          if (revokeButton) {
+            await api(`/api/reports/${encodeURIComponent(reportMeta.id)}/links/${encodeURIComponent(revokeButton.dataset.revokeLink)}`, {
+              method: "DELETE",
+              body: "{}"
+            });
+            activeShareLinks.delete(revokeButton.dataset.revokeLink);
+            await refreshSharing();
+          }
+        } catch (error) {
+          showToast(error.message);
+        }
+      });
+      window.addEventListener("beforeunload", (event) => {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = "";
+      });
 
       render();
       loadExchangeRates();
+      initializeAccount();
     })();

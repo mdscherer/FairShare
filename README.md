@@ -46,7 +46,6 @@ It can be run from any working directory, which makes it suitable for cron. For 
 - Optional debt simplification to reduce the number of payments
 - USD, EUR, GBP, CAD, and AUD display formats
 - Conversion of results between USD, EUR, GBP, CAD, and AUD
-- JSON import for migrating existing local reports
 - Responsive, keyboard-accessible interface
 - Named server reports, autosaving, and a retry/flush Save control
 - Owner-managed email and private-link sharing

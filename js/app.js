@@ -55,8 +55,6 @@
         saveBtn: $("#saveBtn"),
         shareBtn: $("#shareBtn"),
         addExpenseBtn: $("#addExpenseBtn"),
-        importBtn: $("#importBtn"),
-        importFile: $("#importFile"),
         expenseCount: $("#expenseCount"),
         listViewBtn: $("#listViewBtn"),
         gridViewBtn: $("#gridViewBtn"),
@@ -1276,26 +1274,6 @@
         showToast("All data cleared.");
       }
 
-      async function importData(event) {
-        const [file] = event.target.files;
-        if (!file) return;
-        try {
-          if (file.size > 5 * 1024 * 1024) throw new Error("The JSON file is too large.");
-          const importedState = parseImportedState(JSON.parse(await file.text()));
-          if ((state.people.length || state.expenses.length) &&
-              !confirm("Replace all current people and expenses with the imported data?")) return;
-          state = importedState;
-          saveState();
-          render();
-          if (els.dialog.open) els.dialog.close();
-          showToast("Data imported.");
-        } catch (error) {
-          showToast(error instanceof SyntaxError ? "The selected file is not valid JSON." : error.message);
-        } finally {
-          event.target.value = "";
-        }
-      }
-
       function showToast(message) {
         clearTimeout(toastTimer);
         els.toast.textContent = message;
@@ -1321,8 +1299,6 @@
       els.saveBtn.addEventListener("click", () => saveReport().catch(handleSaveError));
       els.shareBtn.addEventListener("click", openSharing);
       els.addExpenseBtn.addEventListener("click", () => openExpenseDialog());
-      els.importBtn.addEventListener("click", () => els.importFile.click());
-      els.importFile.addEventListener("change", importData);
       els.resetBtn.addEventListener("click", resetData);
       els.currencySelect.addEventListener("change", () => {
         state.currency = els.currencySelect.value;

@@ -491,10 +491,11 @@
 
       function renderReportControls() {
         els.accountStatus.textContent = authUser ? `${authUser.name} · ${authUser.email}` : "Local draft";
-        els.signInBtn.hidden = Boolean(authUser);
-        els.signInBtn.disabled = !googleEnabled;
-        els.signInBtn.title = googleEnabled ? "" : "Google sign-in is not configured on this server";
-        els.signOutBtn.hidden = !authUser;
+        els.signInBtn.disabled = Boolean(authUser) || !googleEnabled;
+        els.signInBtn.title = authUser
+          ? "You are already signed in"
+          : googleEnabled ? "" : "Google sign-in is not configured on this server";
+        els.signOutBtn.disabled = !authUser;
         els.reportName.value = reportMeta.title;
         els.reportSelect.disabled = !authUser;
         const current = reportMeta.id || "";

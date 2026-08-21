@@ -5,6 +5,8 @@
       const REPORT_META_KEY = "fairshare.report-meta.v1";
       const SHARE_TOKEN_KEY = "fairshare.pending-share-token";
       const SAVE_AFTER_AUTH_KEY = "fairshare.save-after-auth";
+      const CLIENT_ID_KEY = "fairshare.client-id";
+      const CLIENT_ID = loadClientId();
       const CURRENCIES = {
         USD: { locale: "en-US", symbol: "$" },
         EUR: { locale: "de-DE", symbol: "€" },
@@ -98,6 +100,18 @@
       function makeId(prefix) {
         if (globalThis.crypto && crypto.randomUUID) return `${prefix}_${crypto.randomUUID()}`;
         return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+      }
+
+      function loadClientId() {
+        try {
+          const existing = sessionStorage.getItem(CLIENT_ID_KEY);
+          if (existing) return existing;
+          const created = makeId("client");
+          sessionStorage.setItem(CLIENT_ID_KEY, created);
+          return created;
+        } catch {
+          return makeId("client");
+        }
       }
 
       function escapeHtml(value) {
@@ -542,6 +556,7 @@
           const payload = reportMeta.id
             ? await api(`/api/reports/${encodeURIComponent(reportMeta.id)}`, {
               method: "PUT",
+              headers: { "X-FairShare-Client": CLIENT_ID },
               body: JSON.stringify({ title, state, baseRevision: reportMeta.revision })
             })
             : await api("/api/reports", {
@@ -670,7 +685,7 @@
       function subscribeToReport() {
         if (socket?.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify(reportMeta.id
-            ? { type: "subscribe", reportId: reportMeta.id }
+            ? { type: "subscribe", reportId: reportMeta.id, clientId: CLIENT_ID }
             : { type: "unsubscribe" }));
         }
       }

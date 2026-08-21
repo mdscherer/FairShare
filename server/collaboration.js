@@ -55,6 +55,7 @@ class CollaborationHub {
       }
       this.leave(ws);
       ws.reportId = message.reportId;
+      ws.clientId = validClientId(message.clientId);
       if (!this.rooms.has(ws.reportId)) this.rooms.set(ws.reportId, new Set());
       this.rooms.get(ws.reportId).add(ws);
       ws.send(JSON.stringify({ type: "subscribed", reportId: ws.reportId }));
@@ -71,11 +72,13 @@ class CollaborationHub {
     ws.reportId = null;
   }
 
-  async broadcast(report, sourceUserId) {
+  async broadcast(report, source) {
     const room = this.rooms.get(report.id);
     if (!room) return;
     for (const ws of room) {
-      if (ws.userId !== sourceUserId && ws.readyState === WebSocket.OPEN) {
+      const isSource = Boolean(source?.clientId) &&
+        ws.userId === source.userId && ws.clientId === source.clientId;
+      if (!isSource && ws.readyState === WebSocket.OPEN) {
         try {
           const authorizedReport = await this.store.getReport(ws.userId, report.id);
           ws.send(JSON.stringify({ type: "report", report: authorizedReport }));
@@ -96,6 +99,10 @@ class CollaborationHub {
       }
     }
   }
+}
+
+function validClientId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(value) ? value : null;
 }
 
 module.exports = { CollaborationHub };

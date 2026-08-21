@@ -146,7 +146,10 @@ async function createApp(options = {}) {
   }));
   api.put("/reports/:reportId", requireJson, verifyOrigin, asyncRoute(async (req, res) => {
     const report = await store.updateReport(req.user.id, req.params.reportId, req.body);
-    req.app.locals.hub?.broadcast(report, req.user.id);
+    req.app.locals.hub?.broadcast(report, {
+      userId: req.user.id,
+      clientId: validClientId(req.get("x-fairshare-client"))
+    });
     res.json({ report });
   }));
   api.get("/reports/:reportId/sharing", asyncRoute(async (req, res) => {
@@ -245,6 +248,10 @@ function verifyOrigin(req, res, next) {
   const expected = `${req.protocol}://${req.get("host")}`;
   if (origin !== expected) return res.status(403).json({ error: "Cross-origin request rejected." });
   next();
+}
+
+function validClientId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(value) ? value : null;
 }
 
 function asyncRoute(handler) {

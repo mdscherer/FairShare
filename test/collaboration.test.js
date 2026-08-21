@@ -5,9 +5,10 @@ const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const { CollaborationHub } = require("../server/collaboration");
 
-function fakeSocket(userId) {
+function fakeSocket(userId, clientId) {
   return {
     userId,
+    clientId,
     readyState: 1,
     messages: [],
     send(value) { this.messages.push(JSON.parse(value)); },
@@ -37,13 +38,18 @@ test("collaboration broadcasts only authorized user-specific reports", async (t)
     clearInterval(hub.heartbeat);
     hub.wss.close();
   });
-  const owner = fakeSocket("owner");
-  const editor = fakeSocket("editor");
-  const blocked = fakeSocket("blocked");
-  hub.rooms.set("report-id", new Set([owner, editor, blocked]));
+  const sourceDevice = fakeSocket("owner", "client_source");
+  const otherDevice = fakeSocket("owner", "client_other");
+  const editor = fakeSocket("editor", "client_editor");
+  const blocked = fakeSocket("blocked", "client_blocked");
+  hub.rooms.set("report-id", new Set([sourceDevice, otherDevice, editor, blocked]));
 
-  await hub.broadcast({ id: "report-id" }, "owner");
-  assert.equal(owner.messages.length, 0);
+  await hub.broadcast(
+    { id: "report-id" },
+    { userId: "owner", clientId: "client_source" }
+  );
+  assert.equal(sourceDevice.messages.length, 0);
+  assert.equal(otherDevice.messages[0].report.role, "owner");
   assert.equal(editor.messages[0].report.role, "editor");
   assert.equal(blocked.closed, true);
 });

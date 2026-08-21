@@ -84,6 +84,24 @@ test("report APIs create and return validated state", async (t) => {
   assert.equal((await loaded.json()).report.title, "API report");
 });
 
+test("duplicate report names return 409 without crashing the server", async (t) => {
+  const base = await serverFixture(t);
+  const request = () => fetch(`${base}/api/reports`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-test-user": "yes" },
+    body: JSON.stringify({ title: "Duplicate", state: state() })
+  });
+
+  assert.equal((await request()).status, 201);
+  const duplicate = await request();
+  assert.equal(duplicate.status, 409);
+  assert.equal((await duplicate.json()).error, "You already have a report with that name.");
+
+  const healthy = await fetch(`${base}/api/reports`, { headers: { "x-test-user": "yes" } });
+  assert.equal(healthy.status, 200);
+  assert.equal((await healthy.json()).reports.length, 1);
+});
+
 test("report APIs reject malformed and oversized JSON", async (t) => {
   const base = await serverFixture(t);
   const malformed = await fetch(`${base}/api/reports`, {

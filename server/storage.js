@@ -310,10 +310,15 @@ class ReportStore {
 
   withLock(key, task) {
     const prior = this.locks.get(key) || Promise.resolve();
-    const next = prior.catch(() => {}).then(task);
-    const tracked = next.finally(() => {
-      if (this.locks.get(key) === tracked) this.locks.delete(key);
-    });
+    const next = prior.then(task);
+    const tracked = next.then(
+      () => {
+        if (this.locks.get(key) === tracked) this.locks.delete(key);
+      },
+      () => {
+        if (this.locks.get(key) === tracked) this.locks.delete(key);
+      }
+    );
     this.locks.set(key, tracked);
     return next;
   }
